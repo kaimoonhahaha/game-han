@@ -28,11 +28,12 @@
   }
   #camWrap{
     position:absolute; inset:0;
-    transform:scaleX(-1); /* mirror video + canvas together, keeps math simple */
+    /* เอา scaleX(-1) ออกจากตรงนี้ เพื่อไม่ให้ข้อความ Canvas กลับด้าน */
   }
   video{
     position:absolute; inset:0; width:100%; height:100%;
     object-fit:cover; background:#000;
+    transform: scaleX(-1); /* แสดงผลกล้องเฉพาะตัววิดีโอแบบกระจก */
   }
   canvas{
     position:absolute; inset:0; width:100%; height:100%; display:block;
@@ -142,7 +143,7 @@
   @keyframes spin{to{transform:rotate(360deg);}}
 
   #debugStatus{
-    position:absolute; left:14px; top:calc(70px + env(safe-area-inset-top));
+    position:absolute; left:14px; top:64px;
     background:var(--panel); border:1px solid var(--line); border-radius:10px;
     padding:6px 10px; font-size:11px; color:#9be; z-index:5; pointer-events:none;
     letter-spacing:.5px; max-width:260px; line-height:1.5;
@@ -194,7 +195,7 @@
   </div>
   <button id="startBtn">เริ่มเกม</button>
   <button id="camFacingBtn">🔄 สลับกล้อง (หน้า/หลัง)</button>
-  <div id="permError">ต้องอนุญาตให้ใช้กล้องและไมโครโฟนเพื่อเล่นเกมนี้ กรุณาอนุญาตแล้วลองใหม่</div>
+  <div id="permError">ต้องอนุญาตให้ใช้กล้องและไมโครโฟนเพื่อเล่นเกมนี้ กรุณาอนุญาตแล้วลองใหม่ (ต้องเปิดผ่าน HTTPS เท่านั้น)</div>
 </div>
 
 <div id="gameOverScreen" class="overlay hidden">
@@ -257,6 +258,11 @@
   let lastHandsError = null;
   let lastResultsAt = 0;
 
+  // ป้องกันการประมวลผลซ้ำข้อนและควบคุม FPS ของ MediaPipe บนมือถือ
+  let isProcessingHands = false;
+  let lastSendTime = 0;
+  const FPS_LIMIT_MS = 1000 / 20; // จำกัดให้ส่งประมวลผลมือไม่เกิน 20 FPS ป้องกันเครื่องค้าง
+
   let laserCooldown = 0;
   const LASER_COOLDOWN_MS = 550;
 
@@ -281,8 +287,10 @@
 
   function toScreen(nx, ny){
     // nx, ny normalized [0,1] within raw video frame
+    // พลิกแกน X (1 - nx) เฉพาะในพิกัดคำนวณ เพื่อทำเอฟเฟกต์กระจกโดยที่ตัวอักษร UI ไม่กลับด้าน
+    const mirroredX = facingMode === 'user' ? (1 - nx) : nx;
     return {
-      x: nx * videoMap.vw * videoMap.scale + videoMap.offX,
+      x: mirroredX * videoMap.vw * videoMap.scale + videoMap.offX,
       y: ny * videoMap.vh * videoMap.scale + videoMap.offY
     };
   }
@@ -307,9 +315,9 @@
     });
     hands.setOptions({
       maxNumHands: 2,
-      modelComplexity: 1,
-      minDetectionConfidence: 0.4,
-      minTrackingConfidence: 0.35
+      modelComplexity: 0,
+      minDetectionConfidence: 0.5,
+      minTrackingConfidence: 0.5
     });
     hands.onResults(onHandsResults);
   }
@@ -322,9 +330,18 @@
   async function startCamera(){
     permError.style.display = 'none';
     if(cameraUtil){ try{ cameraUtil.stop(); }catch(e){} cameraUtil = null; }
+    
+    // ตั้งค่า CSS พลิกวิดีโอตามโหมดกล้องหน้า/หลัง
+    videoEl.style.transform = facingMode === 'user' ? 'scaleX(-1)' : 'none';
+
     cameraUtil = new Camera(videoEl, {
       onFrame: async () => {
-        if(!hands) return;
+        const now = performance.now();
+        // ป้องกันการส่งประมวลผลซ้ำขณะที่ AI ยังทำงานไม่เสร็จ หรือส่งถี่เกินไปบนมือถือ
+        if(!hands || isProcessingHands || (now - lastSendTime < FPS_LIMIT_MS)) return;
+        
+        isProcessingHands = true;
+        lastSendTime = now;
         try{
           await hands.send({image: videoEl});
           handsFramesOk++;
@@ -332,10 +349,12 @@
           handsFramesErr++;
           lastHandsError = (e && e.message) ? e.message : String(e);
           console.error('hands.send error', e);
+        }finally{
+          isProcessingHands = false;
         }
       },
-      width: 960,
-      height: 720,
+      width: 480,  // ลดความละเอียดกล้องลงเล็กน้อยเพื่อความลื่นไหลบนมือถือ
+      height: 360,
       facingMode
     });
     await cameraUtil.start();
@@ -348,14 +367,18 @@
   }
 
   async function initMic(){
-    micStream = await navigator.mediaDevices.getUserMedia({audio:true});
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    const src = audioCtx.createMediaStreamSource(micStream);
-    analyser = audioCtx.createAnalyser();
-    analyser.fftSize = 1024;
-    analyser.smoothingTimeConstant = 0.6;
-    micDataArray = new Uint8Array(analyser.fftSize);
-    src.connect(analyser);
+    try {
+      micStream = await navigator.mediaDevices.getUserMedia({audio:true});
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const src = audioCtx.createMediaStreamSource(micStream);
+      analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 1024;
+      analyser.smoothingTimeConstant = 0.6;
+      micDataArray = new Uint8Array(analyser.fftSize);
+      src.connect(analyser);
+    } catch(e) {
+      console.warn("ไม่สามารถเข้าถึงไมโครโฟนได้:", e);
+    }
   }
 
   function readMicVolumePct(){
@@ -367,7 +390,6 @@
       sumSq += v*v;
     }
     const rms = Math.sqrt(sumSq / micDataArray.length);
-    // rms roughly 0..~0.6 for loud speech; scale to 0-100
     return Math.min(100, rms * 260);
   }
 
@@ -429,7 +451,6 @@
 
   function fireLaser(){
     if(balls.length === 0) return;
-    // target the ball closest to the bottom (most urgent)
     let target = balls[0];
     for(const b of balls) if(b.y > target.y) target = b;
     lasers.push({
@@ -512,7 +533,6 @@
     ctx.strokeStyle = 'rgba(255,255,255,.35)';
     ctx.lineWidth = 2;
     ctx.stroke();
-    // spikes to read as "danger orb"
     ctx.strokeStyle = b.color;
     ctx.lineWidth = 2;
     for(let i=0;i<6;i++){
@@ -574,7 +594,7 @@
   // ---------- Main loop ----------
   function gameLoop(now){
     if(!running) return;
-    const dt = Math.min(50, now - lastFrameTime); // ms, clamp for tab-switch spikes
+    const dt = Math.min(50, now - lastFrameTime);
     lastFrameTime = now;
     elapsedGameTime += dt;
 
@@ -592,7 +612,6 @@
     }
 
     // update balls
-    const dangerY = canvas.height - 46;
     for(const b of [...balls]){
       b.y += b.vy * (dt/1000);
       b.rot += b.rotSpeed * (dt/1000);
@@ -617,22 +636,24 @@
       fireLaser();
     }
 
-    // lasers
-    for(const l of [...lasers]){
+    // lasers (เคลียร์การลบข้อมูลแบบปลอดภัยจาก Memory leak)
+    lasers = lasers.filter(l => {
       l.age += dt;
-      if(l.age >= l.life){ lasers = lasers.filter(x=>x!==l); continue; }
+      if(l.age >= l.life) return false;
       drawLaser(l);
-    }
+      return true;
+    });
 
-    // particles
-    for(const p of [...particles]){
+    // particles (เคลียร์การลบข้อมูลแบบปลอดภัยจาก Memory leak)
+    particles = particles.filter(p => {
       p.age += dt;
-      if(p.age >= p.life){ particles = particles.filter(x=>x!==p); continue; }
+      if(p.age >= p.life) return false;
       p.x += p.vx*(dt/1000);
       p.y += p.vy*(dt/1000);
       p.vy += 220*(dt/1000);
       drawParticle(p);
-    }
+      return true;
+    });
 
     if(running) requestAnimationFrame(gameLoop);
   }
@@ -655,6 +676,11 @@
   }
 
   async function beginGame(){
+    // ปลุกระบบ AudioContext บนเบราว์เซอร์มือถือเมื่อผู้ใช้กดปุ่ม
+    if(audioCtx && audioCtx.state === 'suspended'){
+      await audioCtx.resume();
+    }
+    
     resetGameState();
     startScreen.classList.add('hidden');
     gameOverScreen.classList.add('hidden');
@@ -672,7 +698,7 @@
     if(handsFramesErr > 0 && handsFramesOk === 0){
       debugStatus.classList.add('err');
       lines = [`โมเดลมือโหลด/ทำงานไม่สำเร็จ`, `(${lastHandsError || 'unknown error'})`,
-        `ลองเปิดผ่าน HTTPS หรือ localhost แทน file://`];
+        `ต้องเปิดผ่าน HTTPS เท่านั้น`];
     } else if(handsFramesOk > 0 && sinceResults !== null && sinceResults > 4 && latestHandLandmarks.length === 0){
       debugStatus.classList.add('err');
       lines.push('ยังไม่พบมือ — ลองยกมือให้เต็มเฟรม/เพิ่มแสง');
@@ -684,7 +710,7 @@
   }
 
   function previewLoop(){
-    if(running) return; // main gameLoop takes over once playing
+    if(running) return;
     updateVideoMap();
     ctx.clearRect(0,0,canvas.width,canvas.height);
     drawHandSkeleton();
