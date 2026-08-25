@@ -141,6 +141,14 @@
   }
   @keyframes spin{to{transform:rotate(360deg);}}
 
+  #debugStatus{
+    position:absolute; left:14px; top:64px;
+    background:var(--panel); border:1px solid var(--line); border-radius:10px;
+    padding:6px 10px; font-size:11px; color:#9be; z-index:5; pointer-events:none;
+    letter-spacing:.5px; max-width:260px; line-height:1.5;
+  }
+  #debugStatus.err{ color:#ff8fa8; border-color:rgba(255,61,154,.5); }
+
   #combo{
     position:absolute; z-index:6; pointer-events:none; font-weight:800; color:var(--neon-amber);
     text-shadow:0 0 10px var(--neon-amber); font-size:20px; opacity:0;
@@ -163,6 +171,7 @@
   </div>
   <div id="micLabel">🎤 ตะโกน / เป่า เพื่อยิงเลเซอร์</div>
   <div id="micBar"><div id="micThresh"></div><div id="micFill"></div></div>
+  <div id="debugStatus"></div>
 </div>
 
 <div id="loading">
@@ -196,8 +205,8 @@
 
 <div id="combo"></div>
 
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/hands.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1675466862/camera_utils.js"></script>
 
 <script>
 (() => {
@@ -219,6 +228,7 @@
   const threshSlider = document.getElementById('threshSlider');
   const finalScoreNum = document.getElementById('finalScoreNum');
   const comboEl = document.getElementById('combo');
+  const debugStatus = document.getElementById('debugStatus');
 
   let facingMode = 'user';
   let hands = null;
@@ -242,6 +252,10 @@
 
   let latestHandLandmarks = []; // array of arrays of {x,y}
   let videoMap = {scale:1, offX:0, offY:0, vw:0, vh:0}; // maps normalized video coords -> canvas px
+  let handsFramesOk = 0;
+  let handsFramesErr = 0;
+  let lastHandsError = null;
+  let lastResultsAt = 0;
 
   let laserCooldown = 0;
   const LASER_COOLDOWN_MS = 550;
@@ -302,6 +316,7 @@
 
   function onHandsResults(results){
     latestHandLandmarks = results.multiHandLandmarks || [];
+    lastResultsAt = performance.now();
   }
 
   async function startCamera(){
@@ -309,7 +324,15 @@
     if(cameraUtil){ try{ cameraUtil.stop(); }catch(e){} cameraUtil = null; }
     cameraUtil = new Camera(videoEl, {
       onFrame: async () => {
-        if(hands) await hands.send({image: videoEl});
+        if(!hands) return;
+        try{
+          await hands.send({image: videoEl});
+          handsFramesOk++;
+        }catch(e){
+          handsFramesErr++;
+          lastHandsError = (e && e.message) ? e.message : String(e);
+          console.error('hands.send error', e);
+        }
       },
       width: 640,
       height: 480,
@@ -628,6 +651,7 @@
     running = false;
     finalScoreNum.textContent = score;
     gameOverScreen.classList.remove('hidden');
+    requestAnimationFrame(previewLoop);
   }
 
   async function beginGame(){
@@ -639,6 +663,34 @@
     requestAnimationFrame(gameLoop);
   }
 
+  function updateDebugStatus(){
+    const now = performance.now();
+    const sinceResults = lastResultsAt ? Math.round((now - lastResultsAt)/1000) : null;
+    let lines = [];
+    lines.push(`มือที่ตรวจพบตอนนี้: ${latestHandLandmarks.length}`);
+    lines.push(`เฟรมสำเร็จ: ${handsFramesOk} / ผิดพลาด: ${handsFramesErr}`);
+    if(handsFramesErr > 0 && handsFramesOk === 0){
+      debugStatus.classList.add('err');
+      lines = [`โมเดลมือโหลด/ทำงานไม่สำเร็จ`, `(${lastHandsError || 'unknown error'})`,
+        `ลองเปิดผ่าน HTTPS หรือ localhost แทน file://`];
+    } else if(handsFramesOk > 0 && sinceResults !== null && sinceResults > 4 && latestHandLandmarks.length === 0){
+      debugStatus.classList.add('err');
+      lines.push('ยังไม่พบมือ — ลองยกมือให้เต็มเฟรม/เพิ่มแสง');
+    } else {
+      debugStatus.classList.remove('err');
+    }
+    debugStatus.innerHTML = lines.join('<br>');
+    requestAnimationFrame(updateDebugStatus);
+  }
+
+  function previewLoop(){
+    if(running) return; // main gameLoop takes over once playing
+    updateVideoMap();
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    drawHandSkeleton();
+    requestAnimationFrame(previewLoop);
+  }
+
   async function bootstrap(){
     try{
       await initHands();
@@ -646,6 +698,8 @@
       await initMic();
       loading.classList.add('hidden');
       startScreen.classList.remove('hidden');
+      requestAnimationFrame(updateDebugStatus);
+      requestAnimationFrame(previewLoop);
     }catch(err){
       console.error(err);
       loading.classList.add('hidden');
