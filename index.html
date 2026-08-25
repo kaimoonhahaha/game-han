@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>HAND BLAST — ปัดมือทำลายลูกบอล</title>
+<style>
+  :root{
+    --neon-cyan:#38f5d0;
+    --neon-magenta:#ff3d9a;
+    --neon-amber:#ffb84d;
+    --ink:#050a12;
+    --panel:rgba(6,14,24,.72);
+    --line:rgba(56,245,208,.35);
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{
+    margin:0; padding:0; width:100%; height:100%;
+    background:var(--ink); overflow:hidden;
+    font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
+    color:#eafffa;
+    touch-action:none;
+    user-select:none;
+  }
+  #stage{
+    position:fixed; inset:0; width:100%; height:100%;
+    overflow:hidden;
+  }
+  #camWrap{
+    position:absolute; inset:0;
+    transform:scaleX(-1); /* mirror video + canvas together, keeps math simple */
+  }
+  video{
+    position:absolute; inset:0; width:100%; height:100%;
+    object-fit:cover; background:#000;
+  }
+  canvas{
+    position:absolute; inset:0; width:100%; height:100%; display:block;
+  }
+  /* vignette + scanline atmosphere, not mirrored */
+  #fx{
+    position:absolute; inset:0; pointer-events:none;
+    background:
+      radial-gradient(ellipse at center, transparent 45%, rgba(0,0,0,.55) 100%);
+    mix-blend-mode:normal;
+  }
+  #scan{
+    position:absolute; inset:0; pointer-events:none; opacity:.06;
+    background:repeating-linear-gradient(0deg, #fff 0px, #fff 1px, transparent 2px, transparent 3px);
+  }
+
+  /* HUD */
+  #hud{
+    position:absolute; top:0; left:0; right:0;
+    display:flex; justify-content:space-between; align-items:flex-start;
+    padding:calc(10px + env(safe-area-inset-top)) 14px 0 14px;
+    pointer-events:none; z-index:5;
+  }
+  .pill{
+    background:var(--panel); border:1px solid var(--line); border-radius:999px;
+    padding:7px 14px; font-weight:700; letter-spacing:.5px; font-size:15px;
+    box-shadow:0 0 14px rgba(56,245,208,.15);
+    backdrop-filter:blur(6px);
+  }
+  #score{color:var(--neon-cyan);}
+  #lives{display:flex; gap:5px; align-items:center;}
+  .heart{width:16px; height:16px; transition:opacity .2s, transform .2s;}
+  .heart.lost{opacity:.15; transform:scale(.7);}
+
+  #micBar{
+    position:absolute; left:14px; right:14px;
+    bottom:calc(16px + env(safe-area-inset-bottom));
+    height:16px; border-radius:999px; overflow:hidden;
+    background:var(--panel); border:1px solid var(--line);
+    z-index:5; pointer-events:none;
+  }
+  #micFill{
+    height:100%; width:0%;
+    background:linear-gradient(90deg, var(--neon-cyan), var(--neon-magenta));
+    transition:width .06s linear;
+  }
+  #micThresh{
+    position:absolute; top:-3px; bottom:-3px; width:3px;
+    background:var(--neon-amber); box-shadow:0 0 8px var(--neon-amber);
+  }
+  #micLabel{
+    position:absolute; left:0; right:0; bottom:calc(36px + env(safe-area-inset-bottom));
+    text-align:center; font-size:11px; letter-spacing:1.5px; color:#9be; opacity:.8;
+    z-index:5; pointer-events:none; text-transform:uppercase;
+  }
+
+  /* overlays */
+  .overlay{
+    position:absolute; inset:0; z-index:20;
+    display:flex; align-items:center; justify-content:center; flex-direction:column;
+    text-align:center; padding:24px;
+    background:radial-gradient(ellipse at 50% 30%, rgba(20,40,50,.85), rgba(2,5,9,.96));
+    backdrop-filter:blur(4px);
+  }
+  .hidden{display:none !important;}
+  h1{
+    font-size:clamp(28px,8vw,46px); margin:0 0 4px 0; letter-spacing:2px;
+    color:#fff;
+    text-shadow:0 0 12px var(--neon-cyan), 0 0 30px rgba(56,245,208,.5);
+  }
+  .sub{color:#8fe8d8; font-size:13px; letter-spacing:3px; margin-bottom:22px; text-transform:uppercase;}
+  .rules{
+    max-width:360px; text-align:left; background:var(--panel); border:1px solid var(--line);
+    border-radius:14px; padding:16px 18px; margin-bottom:22px; font-size:14px; line-height:1.7;
+  }
+  .rules b{color:var(--neon-amber);}
+  .rules span.icon{width:1.3em; display:inline-block;}
+  #startBtn,#retryBtn{
+    font-size:18px; font-weight:800; letter-spacing:1px; color:#04150f;
+    background:linear-gradient(135deg, var(--neon-cyan), #7dffcf);
+    border:none; padding:14px 40px; border-radius:999px; cursor:pointer;
+    box-shadow:0 0 24px rgba(56,245,208,.55);
+  }
+  #startBtn:active,#retryBtn:active{transform:scale(.96);}
+  .sliderRow{display:flex; align-items:center; gap:10px; margin-bottom:18px; width:min(320px,80vw);}
+  .sliderRow label{font-size:12px; color:#9be; letter-spacing:1px; white-space:nowrap;}
+  input[type=range]{flex:1; accent-color:var(--neon-cyan);}
+  #camFacingBtn{
+    margin-top:14px; background:transparent; border:1px solid var(--line); color:#9be;
+    padding:8px 16px; border-radius:999px; font-size:12px; letter-spacing:1px; cursor:pointer;
+  }
+  #permError{color:#ff8fa8; font-size:13px; max-width:320px; margin-top:14px; display:none;}
+
+  #gameOverTitle{color:var(--neon-magenta); text-shadow:0 0 14px var(--neon-magenta);}
+  #finalScore{font-size:20px; margin-bottom:22px; color:#fff;}
+  #finalScore b{color:var(--neon-amber); font-size:30px;}
+
+  #loading{
+    position:absolute; inset:0; z-index:30; display:flex; align-items:center; justify-content:center;
+    flex-direction:column; background:var(--ink); gap:14px;
+  }
+  .spinner{
+    width:40px; height:40px; border-radius:50%;
+    border:3px solid rgba(56,245,208,.2); border-top-color:var(--neon-cyan);
+    animation:spin 1s linear infinite;
+  }
+  @keyframes spin{to{transform:rotate(360deg);}}
+
+  #combo{
+    position:absolute; z-index:6; pointer-events:none; font-weight:800; color:var(--neon-amber);
+    text-shadow:0 0 10px var(--neon-amber); font-size:20px; opacity:0;
+  }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <div id="camWrap">
+    <video id="video" autoplay playsinline muted></video>
+    <canvas id="canvas"></canvas>
+  </div>
+  <div id="fx"></div>
+  <div id="scan"></div>
+
+  <div id="hud">
+    <div id="score" class="pill">SCORE 0</div>
+    <div id="lives" class="pill"></div>
+  </div>
+  <div id="micLabel">🎤 ตะโกน / เป่า เพื่อยิงเลเซอร์</div>
+  <div id="micBar"><div id="micThresh"></div><div id="micFill"></div></div>
+</div>
+
+<div id="loading">
+  <div class="spinner"></div>
+  <div style="color:#9be; letter-spacing:1px;">กำลังโหลดระบบตรวจจับมือ...</div>
+</div>
+
+<div id="startScreen" class="overlay hidden">
+  <h1>HAND BLAST</h1>
+  <div class="sub">ปัดมือ · ตะโกน · ทำลายลูกบอล</div>
+  <div class="rules">
+    <div><span class="icon">🖐️</span> ปัด/แตะลูกบอลด้วยมือหรือปลายนิ้วเพื่อทำลาย</div>
+    <div><span class="icon">💥</span> ปล่อยลูกบอลตกถึงพื้น = <b>เสียชีวิต</b></div>
+    <div><span class="icon">🔊</span> ส่งเสียงดังพอ (เกินเส้นสีส้ม) = ยิง<b>เลเซอร์</b>อัตโนมัติ</div>
+    <div><span class="icon">❤️</span> มี 3 ชีวิต — เสียครบแพ้ทันที</div>
+  </div>
+  <div class="sliderRow">
+    <label>ความไวไมค์</label>
+    <input type="range" id="threshSlider" min="8" max="70" value="28">
+  </div>
+  <button id="startBtn">เริ่มเกม</button>
+  <button id="camFacingBtn">🔄 สลับกล้อง (หน้า/หลัง)</button>
+  <div id="permError">ต้องอนุญาตให้ใช้กล้องและไมโครโฟนเพื่อเล่นเกมนี้ กรุณาอนุญาตแล้วลองใหม่</div>
+</div>
+
+<div id="gameOverScreen" class="overlay hidden">
+  <h1 id="gameOverTitle">GAME OVER</h1>
+  <div id="finalScore">คะแนนของคุณ <br><b id="finalScoreNum">0</b></div>
+  <button id="retryBtn">เล่นอีกครั้ง</button>
+</div>
+
+<div id="combo"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+
+<script>
+(() => {
+  const videoEl   = document.getElementById('video');
+  const canvas    = document.getElementById('canvas');
+  const ctx       = canvas.getContext('2d');
+  const camWrap   = document.getElementById('camWrap');
+  const loading   = document.getElementById('loading');
+  const startScreen = document.getElementById('startScreen');
+  const gameOverScreen = document.getElementById('gameOverScreen');
+  const startBtn  = document.getElementById('startBtn');
+  const retryBtn  = document.getElementById('retryBtn');
+  const camFacingBtn = document.getElementById('camFacingBtn');
+  const permError = document.getElementById('permError');
+  const scoreEl   = document.getElementById('score');
+  const livesEl   = document.getElementById('lives');
+  const micFill   = document.getElementById('micFill');
+  const micThresh = document.getElementById('micThresh');
+  const threshSlider = document.getElementById('threshSlider');
+  const finalScoreNum = document.getElementById('finalScoreNum');
+  const comboEl = document.getElementById('combo');
+
+  let facingMode = 'user';
+  let hands = null;
+  let cameraUtil = null;
+  let audioCtx, analyser, micDataArray, micStream;
+  let micThresholdPct = 28; // percent 0-100
+
+  let running = false;
+  let score = 0;
+  let lives = 3;
+  const MAX_LIVES = 3;
+
+  let balls = [];
+  let lasers = [];
+  let particles = [];
+  let ballIdCounter = 0;
+  let spawnTimer = 0;
+  let spawnInterval = 1400; // ms, shrinks over time
+  let lastFrameTime = performance.now();
+  let elapsedGameTime = 0;
+
+  let latestHandLandmarks = []; // array of arrays of {x,y}
+  let videoMap = {scale:1, offX:0, offY:0, vw:0, vh:0}; // maps normalized video coords -> canvas px
+
+  let laserCooldown = 0;
+  const LASER_COOLDOWN_MS = 550;
+
+  function resizeCanvas(){
+    const w = canvas.clientWidth, h = canvas.clientHeight;
+    canvas.width = w; canvas.height = h;
+  }
+  window.addEventListener('resize', resizeCanvas);
+
+  function updateVideoMap(){
+    const vw = videoEl.videoWidth, vh = videoEl.videoHeight;
+    if(!vw || !vh) return;
+    const cw = canvas.width, ch = canvas.height;
+    const scale = Math.max(cw / vw, ch / vh);
+    const drawnW = vw * scale, drawnH = vh * scale;
+    videoMap = {
+      scale, vw, vh,
+      offX: (cw - drawnW) / 2,
+      offY: (ch - drawnH) / 2
+    };
+  }
+
+  function toScreen(nx, ny){
+    // nx, ny normalized [0,1] within raw video frame
+    return {
+      x: nx * videoMap.vw * videoMap.scale + videoMap.offX,
+      y: ny * videoMap.vh * videoMap.scale + videoMap.offY
+    };
+  }
+
+  // ---------- Hearts UI ----------
+  function renderLives(){
+    livesEl.innerHTML = '';
+    for(let i=0;i<MAX_LIVES;i++){
+      const svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
+      svg.setAttribute('viewBox','0 0 24 24');
+      svg.classList.add('heart');
+      if(i >= lives) svg.classList.add('lost');
+      svg.innerHTML = `<path d="M12 21s-6.7-4.35-9.3-8.1C.86 10.2 1.4 6.7 4.2 5.1 6.4 3.85 9 4.5 12 7.5c3-3 5.6-3.65 7.8-2.4 2.8 1.6 3.34 5.1 1.5 7.8C18.7 16.65 12 21 12 21z" fill="${i<lives ? '#ff3d9a':'#334'}" stroke="${i<lives?'#ff90c4':'#445'}" stroke-width="1"/>`;
+      livesEl.appendChild(svg);
+    }
+  }
+
+  // ---------- Camera / Hands setup ----------
+  async function initHands(){
+    hands = new Hands({
+      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+    });
+    hands.setOptions({
+      maxNumHands: 2,
+      modelComplexity: 0,
+      minDetectionConfidence: 0.6,
+      minTrackingConfidence: 0.5
+    });
+    hands.onResults(onHandsResults);
+  }
+
+  function onHandsResults(results){
+    latestHandLandmarks = results.multiHandLandmarks || [];
+  }
+
+  async function startCamera(){
+    permError.style.display = 'none';
+    if(cameraUtil){ try{ cameraUtil.stop(); }catch(e){} cameraUtil = null; }
+    cameraUtil = new Camera(videoEl, {
+      onFrame: async () => {
+        if(hands) await hands.send({image: videoEl});
+      },
+      width: 640,
+      height: 480,
+      facingMode
+    });
+    await cameraUtil.start();
+    await new Promise(res => {
+      if(videoEl.readyState >= 2) return res();
+      videoEl.onloadedmetadata = () => res();
+    });
+    resizeCanvas();
+    updateVideoMap();
+  }
+
+  async function initMic(){
+    micStream = await navigator.mediaDevices.getUserMedia({audio:true});
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const src = audioCtx.createMediaStreamSource(micStream);
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 1024;
+    analyser.smoothingTimeConstant = 0.6;
+    micDataArray = new Uint8Array(analyser.fftSize);
+    src.connect(analyser);
+  }
+
+  function readMicVolumePct(){
+    if(!analyser) return 0;
+    analyser.getByteTimeDomainData(micDataArray);
+    let sumSq = 0;
+    for(let i=0;i<micDataArray.length;i++){
+      const v = (micDataArray[i]-128)/128;
+      sumSq += v*v;
+    }
+    const rms = Math.sqrt(sumSq / micDataArray.length);
+    // rms roughly 0..~0.6 for loud speech; scale to 0-100
+    return Math.min(100, rms * 260);
+  }
+
+  // ---------- Game entities ----------
+  function spawnBall(){
+    const r = 26 + Math.random()*20;
+    const x = r + Math.random() * (canvas.width - r*2);
+    const hueSet = ['#38f5d0','#ff3d9a','#ffb84d','#7dd3ff','#c48bff'];
+    balls.push({
+      id: ballIdCounter++,
+      x, y: -r-10, r,
+      vy: 55 + Math.random()*35 + Math.min(80, elapsedGameTime/1000*3),
+      color: hueSet[Math.floor(Math.random()*hueSet.length)],
+      rot: Math.random()*Math.PI*2,
+      rotSpeed: (Math.random()-0.5)*2
+    });
+  }
+
+  function spawnParticles(x,y,color,count=14){
+    for(let i=0;i<count;i++){
+      const a = Math.random()*Math.PI*2;
+      const sp = 60 + Math.random()*160;
+      particles.push({
+        x,y, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp,
+        life: 500+Math.random()*300, age:0, color, r:2+Math.random()*3
+      });
+    }
+  }
+
+  function destroyBall(ball, mode){
+    balls = balls.filter(b => b.id !== ball.id);
+    spawnParticles(ball.x, ball.y, ball.color, mode==='laser'?24:16);
+    score += mode === 'laser' ? 15 : 10;
+    scoreEl.textContent = 'SCORE ' + score;
+    flashCombo(mode === 'laser' ? '+15 LASER!' : '+10', ball.x, ball.y);
+  }
+
+  function flashCombo(text,x,y){
+    comboEl.textContent = text;
+    comboEl.style.left = x + 'px';
+    comboEl.style.top = y + 'px';
+    comboEl.style.opacity = '1';
+    comboEl.style.transform = 'translate(-50%,-50%) translateY(0px)';
+    comboEl.style.transition = 'none';
+    requestAnimationFrame(()=>{
+      comboEl.style.transition = 'opacity .7s ease, transform .7s ease';
+      comboEl.style.opacity = '0';
+      comboEl.style.transform = 'translate(-50%,-50%) translateY(-40px)';
+    });
+  }
+
+  function loseLife(){
+    lives--;
+    renderLives();
+    if(lives <= 0){
+      endGame();
+    }
+  }
+
+  function fireLaser(){
+    if(balls.length === 0) return;
+    // target the ball closest to the bottom (most urgent)
+    let target = balls[0];
+    for(const b of balls) if(b.y > target.y) target = b;
+    lasers.push({
+      x: target.x, fromY: canvas.height, toY: target.y,
+      life: 220, age: 0, targetId: target.id
+    });
+    destroyBall(target, 'laser');
+  }
+
+  // ---------- Collision: fingertips vs balls ----------
+  const FINGERTIP_IDX = [4,8,12,16,20];
+  function getFingertipScreenPoints(){
+    const pts = [];
+    for(const hand of latestHandLandmarks){
+      for(const idx of FINGERTIP_IDX){
+        const lm = hand[idx];
+        if(lm) pts.push(toScreen(lm.x, lm.y));
+      }
+    }
+    return pts;
+  }
+
+  function checkFingertipCollisions(fingerPts){
+    if(fingerPts.length === 0) return;
+    const hitR = 26;
+    for(const ball of [...balls]){
+      for(const p of fingerPts){
+        const dx = p.x - ball.x, dy = p.y - ball.y;
+        if(dx*dx + dy*dy < (ball.r+hitR)*(ball.r+hitR)){
+          destroyBall(ball, 'hand');
+          break;
+        }
+      }
+    }
+  }
+
+  // ---------- Drawing ----------
+  function drawHandSkeleton(){
+    ctx.save();
+    for(const hand of latestHandLandmarks){
+      const pts = hand.map(lm => toScreen(lm.x, lm.y));
+      ctx.strokeStyle = 'rgba(56,245,208,.55)';
+      ctx.lineWidth = 2;
+      const CONNECTIONS = [[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],
+        [0,9],[9,10],[10,11],[11,12],[0,13],[13,14],[14,15],[15,16],
+        [0,17],[17,18],[18,19],[19,20],[5,9],[9,13],[13,17]];
+      ctx.beginPath();
+      for(const [a,b] of CONNECTIONS){
+        ctx.moveTo(pts[a].x, pts[a].y);
+        ctx.lineTo(pts[b].x, pts[b].y);
+      }
+      ctx.stroke();
+      for(const idx of FINGERTIP_IDX){
+        const p = pts[idx];
+        ctx.beginPath();
+        ctx.arc(p.x,p.y,9,0,Math.PI*2);
+        ctx.fillStyle = 'rgba(56,245,208,.85)';
+        ctx.shadowColor = '#38f5d0'; ctx.shadowBlur = 12;
+        ctx.fill();
+      }
+      ctx.shadowBlur = 0;
+    }
+    ctx.restore();
+  }
+
+  function drawBall(b){
+    ctx.save();
+    ctx.translate(b.x,b.y);
+    ctx.rotate(b.rot);
+    const grad = ctx.createRadialGradient(-b.r*0.3,-b.r*0.3,b.r*0.1, 0,0,b.r);
+    grad.addColorStop(0, '#ffffff');
+    grad.addColorStop(0.25, b.color);
+    grad.addColorStop(1, '#0a0f14');
+    ctx.beginPath();
+    ctx.arc(0,0,b.r,0,Math.PI*2);
+    ctx.fillStyle = grad;
+    ctx.shadowColor = b.color; ctx.shadowBlur = 22;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = 'rgba(255,255,255,.35)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    // spikes to read as "danger orb"
+    ctx.strokeStyle = b.color;
+    ctx.lineWidth = 2;
+    for(let i=0;i<6;i++){
+      const a = i*Math.PI/3;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a)*b.r*0.7, Math.sin(a)*b.r*0.7);
+      ctx.lineTo(Math.cos(a)*b.r*1.25, Math.sin(a)*b.r*1.25);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function drawLaser(l){
+    const t = l.age / l.life;
+    const alpha = 1 - t;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    const grad = ctx.createLinearGradient(l.x, l.fromY, l.x, l.toY);
+    grad.addColorStop(0, 'rgba(255,61,154,0)');
+    grad.addColorStop(1, '#ffffff');
+    ctx.strokeStyle = grad;
+    ctx.lineWidth = 8;
+    ctx.shadowColor = '#ff3d9a'; ctx.shadowBlur = 25;
+    ctx.beginPath();
+    ctx.moveTo(l.x, l.fromY);
+    ctx.lineTo(l.x, l.toY);
+    ctx.stroke();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = '#fff';
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawParticle(p){
+    const t = p.age / p.life;
+    ctx.save();
+    ctx.globalAlpha = 1 - t;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r, 0, Math.PI*2);
+    ctx.fillStyle = p.color;
+    ctx.shadowColor = p.color; ctx.shadowBlur = 8;
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function drawDangerLine(){
+    const y = canvas.height - 46;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255,61,154,.35)';
+    ctx.setLineDash([10,8]);
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0,y);
+    ctx.lineTo(canvas.width,y);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // ---------- Main loop ----------
+  function gameLoop(now){
+    if(!running) return;
+    const dt = Math.min(50, now - lastFrameTime); // ms, clamp for tab-switch spikes
+    lastFrameTime = now;
+    elapsedGameTime += dt;
+
+    updateVideoMap();
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+
+    drawDangerLine();
+
+    // spawn
+    spawnTimer += dt;
+    spawnInterval = Math.max(550, 1400 - elapsedGameTime/1000*18);
+    if(spawnTimer > spawnInterval){
+      spawnTimer = 0;
+      spawnBall();
+    }
+
+    // update balls
+    const dangerY = canvas.height - 46;
+    for(const b of [...balls]){
+      b.y += b.vy * (dt/1000);
+      b.rot += b.rotSpeed * (dt/1000);
+      if(b.y - b.r > canvas.height){
+        balls = balls.filter(x=>x.id!==b.id);
+        loseLife();
+      }
+    }
+    balls.forEach(drawBall);
+
+    // fingertip collisions
+    const fingerPts = getFingertipScreenPoints();
+    checkFingertipCollisions(fingerPts);
+    drawHandSkeleton();
+
+    // mic volume + laser trigger
+    const volPct = readMicVolumePct();
+    micFill.style.width = volPct + '%';
+    laserCooldown = Math.max(0, laserCooldown - dt);
+    if(volPct >= micThresholdPct && laserCooldown <= 0){
+      laserCooldown = LASER_COOLDOWN_MS;
+      fireLaser();
+    }
+
+    // lasers
+    for(const l of [...lasers]){
+      l.age += dt;
+      if(l.age >= l.life){ lasers = lasers.filter(x=>x!==l); continue; }
+      drawLaser(l);
+    }
+
+    // particles
+    for(const p of [...particles]){
+      p.age += dt;
+      if(p.age >= p.life){ particles = particles.filter(x=>x!==p); continue; }
+      p.x += p.vx*(dt/1000);
+      p.y += p.vy*(dt/1000);
+      p.vy += 220*(dt/1000);
+      drawParticle(p);
+    }
+
+    if(running) requestAnimationFrame(gameLoop);
+  }
+
+  // ---------- Flow control ----------
+  function resetGameState(){
+    score = 0; lives = MAX_LIVES;
+    balls = []; lasers = []; particles = [];
+    spawnTimer = 0; spawnInterval = 1400; elapsedGameTime = 0;
+    laserCooldown = 0;
+    scoreEl.textContent = 'SCORE 0';
+    renderLives();
+  }
+
+  function endGame(){
+    running = false;
+    finalScoreNum.textContent = score;
+    gameOverScreen.classList.remove('hidden');
+  }
+
+  async function beginGame(){
+    resetGameState();
+    startScreen.classList.add('hidden');
+    gameOverScreen.classList.add('hidden');
+    lastFrameTime = performance.now();
+    running = true;
+    requestAnimationFrame(gameLoop);
+  }
+
+  async function bootstrap(){
+    try{
+      await initHands();
+      await startCamera();
+      await initMic();
+      loading.classList.add('hidden');
+      startScreen.classList.remove('hidden');
+    }catch(err){
+      console.error(err);
+      loading.classList.add('hidden');
+      startScreen.classList.remove('hidden');
+      permError.style.display = 'block';
+    }
+  }
+
+  threshSlider.addEventListener('input', () => {
+    micThresholdPct = Number(threshSlider.value);
+    micThresh.style.left = micThresholdPct + '%';
+  });
+  micThresholdPct = Number(threshSlider.value);
+  micThresh.style.left = micThresholdPct + '%';
+
+  startBtn.addEventListener('click', beginGame);
+  retryBtn.addEventListener('click', beginGame);
+
+  camFacingBtn.addEventListener('click', async () => {
+    facingMode = facingMode === 'user' ? 'environment' : 'user';
+    try{ await startCamera(); }catch(e){ console.error(e); }
+  });
+
+  window.addEventListener('load', bootstrap);
+})();
+</script>
+</body>
+</html>
