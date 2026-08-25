@@ -142,7 +142,7 @@
   @keyframes spin{to{transform:rotate(360deg);}}
 
   #debugStatus{
-    position:absolute; left:14px; top:64px;
+    position:absolute; left:14px; top:calc(70px + env(safe-area-inset-top));
     background:var(--panel); border:1px solid var(--line); border-radius:10px;
     padding:6px 10px; font-size:11px; color:#9be; z-index:5; pointer-events:none;
     letter-spacing:.5px; max-width:260px; line-height:1.5;
@@ -307,9 +307,9 @@
     });
     hands.setOptions({
       maxNumHands: 2,
-      modelComplexity: 0,
-      minDetectionConfidence: 0.6,
-      minTrackingConfidence: 0.5
+      modelComplexity: 1,
+      minDetectionConfidence: 0.4,
+      minTrackingConfidence: 0.35
     });
     hands.onResults(onHandsResults);
   }
@@ -334,8 +334,8 @@
           console.error('hands.send error', e);
         }
       },
-      width: 640,
-      height: 480,
+      width: 960,
+      height: 720,
       facingMode
     });
     await cameraUtil.start();
