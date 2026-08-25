@@ -145,13 +145,21 @@
     text-align:center; outline:none;
   }
 
-  #startBtn,#retryBtn{
-    font-size:18px; font-weight:800; letter-spacing:1px; color:#04150f;
+  .btnGroup{ display:flex; gap:12px; flex-wrap:wrap; justify-content:center; margin-top:10px; }
+  .btnPrimary{
+    font-size:16px; font-weight:800; letter-spacing:1px; color:#04150f;
     background:linear-gradient(135deg, var(--neon-cyan), #7dffcf);
-    border:none; padding:12px 36px; border-radius:999px; cursor:pointer;
-    box-shadow:0 0 24px rgba(56,245,208,.55); margin-top:6px;
+    border:none; padding:12px 30px; border-radius:999px; cursor:pointer;
+    box-shadow:0 0 20px rgba(56,245,208,.4);
   }
-  #startBtn:active,#retryBtn:active{transform:scale(.96);}
+  .btnSecondary{
+    font-size:15px; font-weight:700; letter-spacing:1px; color:#eafffa;
+    background:var(--panel); border:1px solid var(--line);
+    padding:12px 24px; border-radius:999px; cursor:pointer;
+    backdrop-filter:blur(4px);
+  }
+  .btnPrimary:active, .btnSecondary:active{transform:scale(.96);}
+
   .sliderRow{display:flex; align-items:center; gap:10px; margin-bottom:12px; width:min(320px,80vw);}
   .sliderRow label{font-size:12px; color:#9be; letter-spacing:1px; white-space:nowrap;}
   input[type=range]{flex:1; accent-color:var(--neon-cyan);}
@@ -169,13 +177,22 @@
   /* Leaderboard Styling */
   .leaderboard{
     width:min(340px,90vw); background:var(--panel); border:1px solid var(--line);
-    border-radius:12px; padding:12px; margin:10px 0 16px 0; font-size:13px;
+    border-radius:12px; padding:12px; margin:10px 0 14px 0; font-size:13px;
   }
-  .leaderboard h3{ margin:0 0 8px 0; color:var(--neon-cyan); font-size:14px; text-transform:uppercase; letter-spacing:1px;}
+  .leaderboard h3{ margin:0 0 8px 0; color:var(--neon-cyan); font-size:13px; text-transform:uppercase; letter-spacing:1px;}
   .lbRow{ display:flex; justify-content:space-between; padding:4px 8px; border-bottom:1px solid rgba(255,255,255,.05); }
   .lbRow:last-child{ border-bottom:none; }
   .lbRank{ font-weight:bold; color:var(--neon-amber); width:30px; text-align:left;}
   .lbScore{ font-weight:bold; color:#fff; }
+
+  /* Leaderboard บนหน้าเริ่มเกม (มุมขวาบน) */
+  #mainMenuLB{
+    position:absolute; top:16px; right:16px; width:220px; margin:0;
+    backdrop-filter:blur(8px); z-index:25; display:none;
+  }
+  @media (max-width: 768px) {
+    #mainMenuLB{ position:relative; top:auto; right:auto; width:min(340px,90vw); margin-bottom:14px; }
+  }
 
   #loading{
     position:absolute; inset:0; z-index:30; display:flex; align-items:center; justify-content:center;
@@ -243,12 +260,19 @@
   <div style="color:#9be; letter-spacing:1px;">กำลังโหลดระบบตรวจจับมือ...</div>
 </div>
 
+<!-- Start / Main Menu Screen -->
 <div id="startScreen" class="overlay hidden">
   <h1>HAND BLAST</h1>
   <div class="sub">BALANCED & TARGET EDITION</div>
   
+  <!-- Corner Leaderboard -->
+  <div id="mainMenuLB" class="leaderboard">
+    <h3>🏆 Top 5 High Scores</h3>
+    <div id="mainLbList"></div>
+  </div>
+
   <div class="inputGroup">
-    <label for="targetInput">🎯 เป้าหมายคะแนนชนะ:</label>
+    <label for="targetInput">🎯 ตั้งเป้าหมายคะแนนชนะ:</label>
     <input type="number" id="targetInput" value="500" min="100" step="100">
   </div>
 
@@ -266,21 +290,25 @@
     <input type="range" id="threshSlider" min="8" max="60" value="25">
   </div>
   
-  <button id="startBtn">เริ่มเล่นเกม</button>
+  <button id="startBtn" class="btnPrimary">เริ่มเล่นเกม</button>
   <button id="camFacingBtn">🔄 สลับกล้อง (หน้า/หลัง)</button>
   <div id="permError">ต้องอนุญาตให้ใช้กล้องและไมโครโฟนเพื่อเล่นเกมนี้</div>
 </div>
 
+<!-- Game Over / Victory Screen -->
 <div id="gameOverScreen" class="overlay hidden">
   <h1 id="gameOverTitle">GAME OVER</h1>
   <div id="finalScore">คะแนนของคุณ <br><b id="finalScoreNum">0</b></div>
   
   <div class="leaderboard">
     <h3>🏆 สถิติสูงสุด 5 อันดับแรก</h3>
-    <div id="lbList"></div>
+    <div id="endLbList"></div>
   </div>
 
-  <button id="retryBtn">เล่นอีกครั้ง</button>
+  <div class="btnGroup">
+    <button id="retryBtn" class="btnPrimary">เล่นอีกครั้ง</button>
+    <button id="mainMenuBtn" class="btnSecondary">🏠 กลับหน้าหลัก</button>
+  </div>
 </div>
 
 <div id="combo"></div>
@@ -298,6 +326,7 @@ import { FilesetResolver, HandLandmarker } from "https://cdn.jsdelivr.net/npm/@m
   const gameOverTitle = document.getElementById('gameOverTitle');
   const startBtn = document.getElementById('startBtn');
   const retryBtn = document.getElementById('retryBtn');
+  const mainMenuBtn = document.getElementById('mainMenuBtn');
   const camFacingBtn = document.getElementById('camFacingBtn');
   const permError = document.getElementById('permError');
   const scoreEl = document.getElementById('score');
@@ -310,7 +339,9 @@ import { FilesetResolver, HandLandmarker } from "https://cdn.jsdelivr.net/npm/@m
   const micThreshL2 = document.getElementById('micThreshL2');
   const threshSlider = document.getElementById('threshSlider');
   const finalScoreNum = document.getElementById('finalScoreNum');
-  const lbList = document.getElementById('lbList');
+  const mainLbList = document.getElementById('mainLbList');
+  const endLbList = document.getElementById('endLbList');
+  const mainMenuLB = document.getElementById('mainMenuLB');
   const comboEl = document.getElementById('combo');
   const debugStatus = document.getElementById('debugStatus');
   const chargeContainer = document.getElementById('chargeContainer');
@@ -467,7 +498,6 @@ import { FilesetResolver, HandLandmarker } from "https://cdn.jsdelivr.net/npm/@m
     let hp = 1;
     let color = '#38f5d0';
 
-    // ปลดล็อกประเภทบอลตาม Level (ทุกๆ 300 คะแนน)
     if(currentLevel >= 3 && randType < 0.22){
       type = 'mic_only';
       color = '#ff007f';
@@ -480,7 +510,6 @@ import { FilesetResolver, HandLandmarker } from "https://cdn.jsdelivr.net/npm/@m
       color = '#ffb84d';
     }
 
-    // ความเร็วบอลขยับเพิ่มตาม Level (เป็นขั้นๆ ไม่เร็วจนเกินไป)
     const baseSpeed = 40 + (currentLevel - 1) * 15;
     const vy = baseSpeed + Math.random() * 20;
 
@@ -523,7 +552,6 @@ import { FilesetResolver, HandLandmarker } from "https://cdn.jsdelivr.net/npm/@m
       
       updateLevelLogic();
 
-      // Check Win Condition
       if(score >= targetScore){
         endGame(true);
       }
@@ -716,7 +744,6 @@ import { FilesetResolver, HandLandmarker } from "https://cdn.jsdelivr.net/npm/@m
     detectHandsThisFrame();
     ctx.clearRect(0,0,canvas.width,canvas.height);
 
-    // Dynamic Spawning Based on Level
     spawnTimer += dt;
     spawnInterval = Math.max(700, 1800 - (currentLevel - 1) * 200);
     if(spawnTimer > spawnInterval){
@@ -724,7 +751,6 @@ import { FilesetResolver, HandLandmarker } from "https://cdn.jsdelivr.net/npm/@m
       spawnBall();
     }
 
-    // Update Balls
     for(const b of [...balls]){
       b.y += b.vy * (dt/1000);
       b.rot += b.rotSpeed * (dt/1000);
@@ -737,17 +763,14 @@ import { FilesetResolver, HandLandmarker } from "https://cdn.jsdelivr.net/npm/@m
     }
     balls.forEach(drawBall);
 
-    // Hands
     const fingerPts = getFingertipScreenPoints();
     checkFingertipCollisions(fingerPts);
     drawHandSkeleton();
 
-    // Mic Logic
     const volPct = readMicVolumePct();
     micFill.style.width = volPct + '%';
     laserCooldown = Math.max(0, laserCooldown - dt);
 
-    // L2 Ultimate Charge Check
     if(volPct >= micL2Pct){
       l2HoldTimer += dt;
       const pct = Math.min(100, (l2HoldTimer / L2_REQUIRED_HOLD_MS) * 100);
@@ -765,13 +788,11 @@ import { FilesetResolver, HandLandmarker } from "https://cdn.jsdelivr.net/npm/@m
       else chargeContainer.style.setProperty('--charge-pct', (l2HoldTimer / L2_REQUIRED_HOLD_MS) * 100);
     }
 
-    // L1 Normal Laser
     if(volPct >= micL1Pct && volPct < micL2Pct && laserCooldown <= 0){
       laserCooldown = LASER_COOLDOWN_MS;
       fireLaser();
     }
 
-    // Render Lasers & MegaBeams
     for(const l of [...lasers]){
       l.age += dt;
       if(l.age >= l.life){ lasers = lasers.filter(x=>x!==l); continue; }
@@ -783,7 +804,6 @@ import { FilesetResolver, HandLandmarker } from "https://cdn.jsdelivr.net/npm/@m
       drawMegaBeams(mb);
     }
 
-    // Particles
     for(const p of [...particles]){
       p.age += dt;
       if(p.age >= p.life){ particles = particles.filter(x=>x!==p); continue; }
@@ -801,25 +821,33 @@ import { FilesetResolver, HandLandmarker } from "https://cdn.jsdelivr.net/npm/@m
 
   function saveScore(newScore){
     const lb = getLeaderboard();
-    lb.push({ score: newScore, date: new Date().toLocaleDateString('th-TH') });
-    lb.sort((a,b) => b.score - a.score);
+    if(newScore > 0){
+      lb.push({ score: newScore, date: new Date().toLocaleDateString('th-TH') });
+      lb.sort((a,b) => b.score - a.score);
+    }
     const top5 = lb.slice(0, 5);
     localStorage.setItem('handblast_lb', JSON.stringify(top5));
     return top5;
   }
 
-  function renderLeaderboard(lb){
-    lbList.innerHTML = '';
-    if(lb.length === 0){
-      lbList.innerHTML = '<div style="color:#888;">ยังไม่มีสถิติ</div>';
-      return;
-    }
-    lb.forEach((item, index) => {
-      const row = document.createElement('div');
-      row.className = 'lbRow';
-      row.innerHTML = `<span class="lbRank">#${index+1}</span> <span class="lbScore">${item.score} คะแนน</span> <span style="color:#668; font-size:11px;">${item.date}</span>`;
-      lbList.appendChild(row);
-    });
+  function refreshLeaderboards(top5 = getLeaderboard()){
+    const render = (targetEl) => {
+      targetEl.innerHTML = '';
+      if(top5.length === 0){
+        targetEl.innerHTML = '<div style="color:#888; padding:4px;">ยังไม่มีสถิติ</div>';
+        return;
+      }
+      top5.forEach((item, index) => {
+        const row = document.createElement('div');
+        row.className = 'lbRow';
+        row.innerHTML = `<span class="lbRank">#${index+1}</span> <span class="lbScore">${item.score} คะแนน</span> <span style="color:#668; font-size:11px;">${item.date}</span>`;
+        targetEl.appendChild(row);
+      });
+    };
+
+    render(mainLbList);
+    render(endLbList);
+    mainMenuLB.style.display = top5.length > 0 ? 'block' : 'none';
   }
 
   // ---------- Control & Flow ----------
@@ -849,10 +877,18 @@ import { FilesetResolver, HandLandmarker } from "https://cdn.jsdelivr.net/npm/@m
     }
 
     const top5 = saveScore(score);
-    renderLeaderboard(top5);
+    refreshLeaderboards(top5);
 
     gameOverScreen.classList.remove('hidden');
     chargeContainer.classList.remove('active');
+    requestAnimationFrame(previewLoop);
+  }
+
+  function showMainMenu(){
+    running = false;
+    gameOverScreen.classList.add('hidden');
+    startScreen.classList.remove('hidden');
+    refreshLeaderboards();
     requestAnimationFrame(previewLoop);
   }
 
@@ -893,6 +929,7 @@ import { FilesetResolver, HandLandmarker } from "https://cdn.jsdelivr.net/npm/@m
       await initMic();
       loading.classList.add('hidden');
       startScreen.classList.remove('hidden');
+      refreshLeaderboards();
       requestAnimationFrame(updateDebugStatus);
       requestAnimationFrame(previewLoop);
     }catch(err){
@@ -917,6 +954,7 @@ import { FilesetResolver, HandLandmarker } from "https://cdn.jsdelivr.net/npm/@m
 
   startBtn.addEventListener('click', beginGame);
   retryBtn.addEventListener('click', beginGame);
+  mainMenuBtn.addEventListener('click', showMainMenu);
 
   camFacingBtn.addEventListener('click', async () => {
     facingMode = facingMode === 'user' ? 'environment' : 'user';
