@@ -3,12 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-<title>HAND BLAST — ปัดมือทำลายลูกบอล</title>
+<title>HAND BLAST — ULTIMATE EDITION</title>
 <style>
   :root{
     --neon-cyan:#38f5d0;
     --neon-magenta:#ff3d9a;
     --neon-amber:#ffb84d;
+    --neon-purple:#9d4edd;
     --ink:#050a12;
     --panel:rgba(6,14,24,.72);
     --line:rgba(56,245,208,.35);
@@ -28,7 +29,7 @@
   }
   #camWrap{
     position:absolute; inset:0;
-    transform:scaleX(-1); /* mirror video + canvas together, keeps math simple */
+    transform:scaleX(-1);
   }
   video{
     position:absolute; inset:0; width:100%; height:100%;
@@ -37,12 +38,9 @@
   canvas{
     position:absolute; inset:0; width:100%; height:100%; display:block;
   }
-  /* vignette + scanline atmosphere, not mirrored */
   #fx{
     position:absolute; inset:0; pointer-events:none;
-    background:
-      radial-gradient(ellipse at center, transparent 45%, rgba(0,0,0,.55) 100%);
-    mix-blend-mode:normal;
+    background:radial-gradient(ellipse at center, transparent 45%, rgba(0,0,0,.55) 100%);
   }
   #scan{
     position:absolute; inset:0; pointer-events:none; opacity:.06;
@@ -70,26 +68,48 @@
   #micBar{
     position:absolute; left:14px; right:14px;
     bottom:calc(16px + env(safe-area-inset-bottom));
-    height:16px; border-radius:999px; overflow:hidden;
+    height:18px; border-radius:999px; overflow:hidden;
     background:var(--panel); border:1px solid var(--line);
     z-index:5; pointer-events:none;
   }
   #micFill{
     height:100%; width:0%;
-    background:linear-gradient(90deg, var(--neon-cyan), var(--neon-magenta));
-    transition:width .06s linear;
+    background:linear-gradient(90deg, var(--neon-cyan), var(--neon-amber), var(--neon-magenta));
+    transition:width .05s linear;
   }
-  #micThresh{
+  #micThreshL1{
     position:absolute; top:-3px; bottom:-3px; width:3px;
     background:var(--neon-amber); box-shadow:0 0 8px var(--neon-amber);
   }
+  #micThreshL2{
+    position:absolute; top:-3px; bottom:-3px; width:3px;
+    background:var(--neon-magenta); box-shadow:0 0 8px var(--neon-magenta);
+  }
   #micLabel{
-    position:absolute; left:0; right:0; bottom:calc(36px + env(safe-area-inset-bottom));
-    text-align:center; font-size:11px; letter-spacing:1.5px; color:#9be; opacity:.8;
-    z-index:5; pointer-events:none; text-transform:uppercase;
+    position:absolute; left:0; right:0; bottom:calc(38px + env(safe-area-inset-bottom));
+    text-align:center; font-size:11px; letter-spacing:1px; color:#9be; opacity:.9;
+    z-index:5; pointer-events:none; text-transform:uppercase; font-weight:bold;
   }
 
-  /* overlays */
+  /* Ultimate Charge Wheel */
+  #chargeContainer{
+    position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+    width:120px; height:120px; pointer-events:none; z-index:10; opacity:0; transition:opacity .2s;
+  }
+  #chargeContainer.active{ opacity:1; }
+  .chargeCircle{
+    width:100%; height:100%; border-radius:50%;
+    background:conic-gradient(var(--neon-magenta) calc(var(--charge-pct)*1%), transparent 0deg);
+    display:flex; align-items:center; justify-content:center;
+    box-shadow:0 0 20px var(--neon-magenta);
+  }
+  .chargeInner{
+    width:80%; height:80%; border-radius:50%; background:var(--ink);
+    display:flex; align-items:center; justify-content:center;
+    font-size:12px; font-weight:800; color:var(--neon-magenta); letter-spacing:1px;
+  }
+
+  /* Overlays */
   .overlay{
     position:absolute; inset:0; z-index:20;
     display:flex; align-items:center; justify-content:center; flex-direction:column;
@@ -99,17 +119,16 @@
   }
   .hidden{display:none !important;}
   h1{
-    font-size:clamp(28px,8vw,46px); margin:0 0 4px 0; letter-spacing:2px;
-    color:#fff;
+    font-size:clamp(26px,7vw,42px); margin:0 0 4px 0; letter-spacing:2px; color:#fff;
     text-shadow:0 0 12px var(--neon-cyan), 0 0 30px rgba(56,245,208,.5);
   }
-  .sub{color:#8fe8d8; font-size:13px; letter-spacing:3px; margin-bottom:22px; text-transform:uppercase;}
+  .sub{color:#8fe8d8; font-size:12px; letter-spacing:2px; margin-bottom:18px; text-transform:uppercase;}
   .rules{
-    max-width:360px; text-align:left; background:var(--panel); border:1px solid var(--line);
-    border-radius:14px; padding:16px 18px; margin-bottom:22px; font-size:14px; line-height:1.7;
+    max-width:380px; text-align:left; background:var(--panel); border:1px solid var(--line);
+    border-radius:14px; padding:14px 16px; margin-bottom:18px; font-size:13px; line-height:1.6;
   }
   .rules b{color:var(--neon-amber);}
-  .rules span.icon{width:1.3em; display:inline-block;}
+  .rules span.icon{width:1.4em; display:inline-block;}
   #startBtn,#retryBtn{
     font-size:18px; font-weight:800; letter-spacing:1px; color:#04150f;
     background:linear-gradient(135deg, var(--neon-cyan), #7dffcf);
@@ -117,11 +136,11 @@
     box-shadow:0 0 24px rgba(56,245,208,.55);
   }
   #startBtn:active,#retryBtn:active{transform:scale(.96);}
-  .sliderRow{display:flex; align-items:center; gap:10px; margin-bottom:18px; width:min(320px,80vw);}
+  .sliderRow{display:flex; align-items:center; gap:10px; margin-bottom:14px; width:min(320px,80vw);}
   .sliderRow label{font-size:12px; color:#9be; letter-spacing:1px; white-space:nowrap;}
   input[type=range]{flex:1; accent-color:var(--neon-cyan);}
   #camFacingBtn{
-    margin-top:14px; background:transparent; border:1px solid var(--line); color:#9be;
+    margin-top:12px; background:transparent; border:1px solid var(--line); color:#9be;
     padding:8px 16px; border-radius:999px; font-size:12px; letter-spacing:1px; cursor:pointer;
   }
   #permError{color:#ff8fa8; font-size:13px; max-width:320px; margin-top:14px; display:none;}
@@ -142,16 +161,16 @@
   @keyframes spin{to{transform:rotate(360deg);}}
 
   #debugStatus{
-    position:absolute; left:14px; top:calc(70px + env(safe-area-inset-top));
+    position:absolute; left:14px; top:calc(65px + env(safe-area-inset-top));
     background:var(--panel); border:1px solid var(--line); border-radius:10px;
     padding:6px 10px; font-size:11px; color:#9be; z-index:5; pointer-events:none;
-    letter-spacing:.5px; max-width:260px; line-height:1.5;
+    letter-spacing:.5px; max-width:260px; line-height:1.4;
   }
   #debugStatus.err{ color:#ff8fa8; border-color:rgba(255,61,154,.5); }
 
   #combo{
     position:absolute; z-index:6; pointer-events:none; font-weight:800; color:var(--neon-amber);
-    text-shadow:0 0 10px var(--neon-amber); font-size:20px; opacity:0;
+    text-shadow:0 0 10px var(--neon-amber); font-size:22px; opacity:0;
   }
 </style>
 </head>
@@ -169,8 +188,19 @@
     <div id="score" class="pill">SCORE 0</div>
     <div id="lives" class="pill"></div>
   </div>
-  <div id="micLabel">🎤 ตะโกน / เป่า เพื่อยิงเลเซอร์</div>
-  <div id="micBar"><div id="micThresh"></div><div id="micFill"></div></div>
+
+  <div id="chargeContainer">
+    <div class="chargeCircle" style="--charge-pct: 0;">
+      <div class="chargeInner" id="chargeText">CHARGING</div>
+    </div>
+  </div>
+
+  <div id="micLabel">🎤 ไมค์ L1: ยิงเลเซอร์ | L2 (ตะโกนค้าง 3s): ULTIMATE BLAST!</div>
+  <div id="micBar">
+    <div id="micThreshL1" title="L1 Threshold"></div>
+    <div id="micThreshL2" title="L2 Threshold"></div>
+    <div id="micFill"></div>
+  </div>
   <div id="debugStatus"></div>
 </div>
 
@@ -181,16 +211,17 @@
 
 <div id="startScreen" class="overlay hidden">
   <h1>HAND BLAST</h1>
-  <div class="sub">ปัดมือ · ตะโกน · ทำลายลูกบอล</div>
+  <div class="sub">ULTIMATE POWER EDITION</div>
   <div class="rules">
-    <div><span class="icon">🖐️</span> ปัด/แตะลูกบอลด้วยมือหรือปลายนิ้วเพื่อทำลาย</div>
-    <div><span class="icon">💥</span> ปล่อยลูกบอลตกถึงพื้น = <b>เสียชีวิต</b></div>
-    <div><span class="icon">🔊</span> ส่งเสียงดังพอ (เกินเส้นสีส้ม) = ยิง<b>เลเซอร์</b>อัตโนมัติ</div>
-    <div><span class="icon">❤️</span> มี 3 ชีวิต — เสียครบแพ้ทันที</div>
+    <div><span class="icon">🖐️</span> ปัดมือแตะลูกบอลธรรมดาหรือลูกบอลมัลติทัช</div>
+    <div><span class="icon">🖐️❌</span> <b>ลูกบอลไอคอนมือ:</b> ทำลายด้วยมือเท่านั้น!</div>
+    <div><span class="icon">🎤❌</span> <b>ลูกบอลไอคอนไมค์:</b> ทำลายด้วยเสียงเท่านั้น!</div>
+    <div><span class="icon">🔊</span> <b>ไมค์ L1 (สีส้ม):</b> ตะโกนยิงเลเซอร์</div>
+    <div><span class="icon">💥</span> <b>ไมค์ L2 (สีชมพู):</b> ตะโกนลากยาวค้าง 3 วิ ปล่อยคลื่นพลังยักษ์ทำลายล้างทั้งจอ!</div>
   </div>
   <div class="sliderRow">
-    <label>ความไวไมค์</label>
-    <input type="range" id="threshSlider" min="8" max="70" value="28">
+    <label>ความไวไมค์ L1</label>
+    <input type="range" id="threshSlider" min="8" max="60" value="25">
   </div>
   <button id="startBtn">เริ่มเกม</button>
   <button id="camFacingBtn">🔄 สลับกล้อง (หน้า/หลัง)</button>
@@ -209,31 +240,34 @@
 import { FilesetResolver, HandLandmarker } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs";
 
 (() => {
-  const videoEl   = document.getElementById('video');
-  const canvas    = document.getElementById('canvas');
-  const ctx       = canvas.getContext('2d');
-  const camWrap   = document.getElementById('camWrap');
-  const loading   = document.getElementById('loading');
+  const videoEl = document.getElementById('video');
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+  const loading = document.getElementById('loading');
   const startScreen = document.getElementById('startScreen');
   const gameOverScreen = document.getElementById('gameOverScreen');
-  const startBtn  = document.getElementById('startBtn');
-  const retryBtn  = document.getElementById('retryBtn');
+  const startBtn = document.getElementById('startBtn');
+  const retryBtn = document.getElementById('retryBtn');
   const camFacingBtn = document.getElementById('camFacingBtn');
   const permError = document.getElementById('permError');
-  const scoreEl   = document.getElementById('score');
-  const livesEl   = document.getElementById('lives');
-  const micFill   = document.getElementById('micFill');
-  const micThresh = document.getElementById('micThresh');
+  const scoreEl = document.getElementById('score');
+  const livesEl = document.getElementById('lives');
+  const micFill = document.getElementById('micFill');
+  const micThreshL1 = document.getElementById('micThreshL1');
+  const micThreshL2 = document.getElementById('micThreshL2');
   const threshSlider = document.getElementById('threshSlider');
   const finalScoreNum = document.getElementById('finalScoreNum');
   const comboEl = document.getElementById('combo');
   const debugStatus = document.getElementById('debugStatus');
+  const chargeContainer = document.getElementById('chargeContainer');
 
   let facingMode = 'user';
   let handLandmarker = null;
   let videoStream = null;
   let audioCtx, analyser, micDataArray, micStream;
-  let micThresholdPct = 28; // percent 0-100
+  
+  let micL1Pct = 25; 
+  let micL2Pct = 60; 
 
   let running = false;
   let score = 0;
@@ -242,26 +276,28 @@ import { FilesetResolver, HandLandmarker } from "https://cdn.jsdelivr.net/npm/@m
 
   let balls = [];
   let lasers = [];
+  let megaBeams = [];
   let particles = [];
   let ballIdCounter = 0;
   let spawnTimer = 0;
-  let spawnInterval = 1400; // ms, shrinks over time
+  let spawnInterval = 1400;
   let lastFrameTime = performance.now();
   let elapsedGameTime = 0;
 
-  let latestHandLandmarks = []; // array of arrays of {x,y}
-  let videoMap = {scale:1, offX:0, offY:0, vw:0, vh:0}; // maps normalized video coords -> canvas px
+  let latestHandLandmarks = [];
+  let videoMap = {scale:1, offX:0, offY:0, vw:0, vh:0};
   let handsFramesOk = 0;
   let handsFramesErr = 0;
   let lastHandsError = null;
-  let lastResultsAt = 0;
 
   let laserCooldown = 0;
-  const LASER_COOLDOWN_MS = 550;
+  const LASER_COOLDOWN_MS = 450;
+  let l2HoldTimer = 0;
+  const L2_REQUIRED_HOLD_MS = 3000;
 
   function resizeCanvas(){
-    const w = canvas.clientWidth, h = canvas.clientHeight;
-    canvas.width = w; canvas.height = h;
+    canvas.width = canvas.clientWidth;
+    canvas.height = canvas.clientHeight;
   }
   window.addEventListener('resize', resizeCanvas);
 
@@ -270,23 +306,20 @@ import { FilesetResolver, HandLandmarker } from "https://cdn.jsdelivr.net/npm/@m
     if(!vw || !vh) return;
     const cw = canvas.width, ch = canvas.height;
     const scale = Math.max(cw / vw, ch / vh);
-    const drawnW = vw * scale, drawnH = vh * scale;
     videoMap = {
       scale, vw, vh,
-      offX: (cw - drawnW) / 2,
-      offY: (ch - drawnH) / 2
+      offX: (cw - vw * scale) / 2,
+      offY: (ch - vh * scale) / 2
     };
   }
 
   function toScreen(nx, ny){
-    // nx, ny normalized [0,1] within raw video frame
     return {
       x: nx * videoMap.vw * videoMap.scale + videoMap.offX,
       y: ny * videoMap.vh * videoMap.scale + videoMap.offY
     };
   }
 
-  // ---------- Hearts UI ----------
   function renderLives(){
     livesEl.innerHTML = '';
     for(let i=0;i<MAX_LIVES;i++){
@@ -299,67 +332,41 @@ import { FilesetResolver, HandLandmarker } from "https://cdn.jsdelivr.net/npm/@m
     }
   }
 
-  // ---------- Camera / Hands setup (MediaPipe Tasks Vision) ----------
   async function initHands(){
-    const vision = await FilesetResolver.forVisionTasks(
-      "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
-    );
+    const vision = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm");
     try{
       handLandmarker = await HandLandmarker.createFromOptions(vision, {
-        baseOptions: {
-          modelAssetPath: "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
-          delegate: "GPU"
-        },
-        runningMode: "VIDEO",
-        numHands: 2
+        baseOptions: { modelAssetPath: "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task", delegate: "GPU" },
+        runningMode: "VIDEO", numHands: 2
       });
-    }catch(gpuErr){
-      console.warn('GPU delegate failed, retrying with CPU', gpuErr);
+    }catch(e){
       handLandmarker = await HandLandmarker.createFromOptions(vision, {
-        baseOptions: {
-          modelAssetPath: "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
-          delegate: "CPU"
-        },
-        runningMode: "VIDEO",
-        numHands: 2
+        baseOptions: { modelAssetPath: "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task", delegate: "CPU" },
+        runningMode: "VIDEO", numHands: 2
       });
     }
   }
 
-  // Call once per rendered frame (synchronous, no worker/promise hang risk)
   function detectHandsThisFrame(){
     if(!handLandmarker || videoEl.readyState < 2) return;
     try{
       const results = handLandmarker.detectForVideo(videoEl, performance.now());
       latestHandLandmarks = results.landmarks || [];
       handsFramesOk++;
-      lastResultsAt = performance.now();
     }catch(e){
       handsFramesErr++;
-      lastHandsError = (e && e.message) ? e.message : String(e);
-      console.error('detectForVideo error', e);
+      lastHandsError = e.message || String(e);
     }
   }
 
   async function startCamera(){
     permError.style.display = 'none';
-    if(videoStream){
-      videoStream.getTracks().forEach(t => t.stop());
-      videoStream = null;
-    }
+    if(videoStream) videoStream.getTracks().forEach(t => t.stop());
     videoStream = await navigator.mediaDevices.getUserMedia({
-      audio: false,
-      video: {
-        facingMode,
-        width: { ideal: 960 },
-        height: { ideal: 720 }
-      }
+      video: { facingMode, width: { ideal: 960 }, height: { ideal: 720 } }
     });
     videoEl.srcObject = videoStream;
-    await new Promise(res => {
-      if(videoEl.readyState >= 2) return res();
-      videoEl.onloadedmetadata = () => res();
-    });
+    await new Promise(res => { videoEl.onloadedmetadata = () => res(); });
     await videoEl.play();
     resizeCanvas();
     updateVideoMap();
@@ -371,7 +378,7 @@ import { FilesetResolver, HandLandmarker } from "https://cdn.jsdelivr.net/npm/@m
     const src = audioCtx.createMediaStreamSource(micStream);
     analyser = audioCtx.createAnalyser();
     analyser.fftSize = 1024;
-    analyser.smoothingTimeConstant = 0.6;
+    analyser.smoothingTimeConstant = 0.5;
     micDataArray = new Uint8Array(analyser.fftSize);
     src.connect(analyser);
   }
@@ -385,42 +392,76 @@ import { FilesetResolver, HandLandmarker } from "https://cdn.jsdelivr.net/npm/@m
       sumSq += v*v;
     }
     const rms = Math.sqrt(sumSq / micDataArray.length);
-    // rms roughly 0..~0.6 for loud speech; scale to 0-100
-    return Math.min(100, rms * 260);
+    return Math.min(100, rms * 280);
   }
 
-  // ---------- Game entities ----------
+  // ---------- Spawning Entities ----------
   function spawnBall(){
-    const r = 26 + Math.random()*20;
+    const r = 28 + Math.random()*16;
     const x = r + Math.random() * (canvas.width - r*2);
-    const hueSet = ['#38f5d0','#ff3d9a','#ffb84d','#7dd3ff','#c48bff'];
+    const randType = Math.random();
+    
+    let type = 'normal';
+    let hp = 1;
+    let color = '#38f5d0';
+
+    // Difficulty scaling based on Score
+    if(score > 30 && randType < 0.25){
+      type = 'hand_only';
+      color = '#00f0ff';
+    } else if(score > 50 && randType >= 0.25 && randType < 0.50){
+      type = 'mic_only';
+      color = '#ff007f';
+    } else if(score > 20 && randType >= 0.50 && randType < 0.80){
+      type = 'multitap';
+      hp = Math.min(10, 2 + Math.floor(score / 40) + Math.floor(Math.random()*2));
+      color = '#ffb84d';
+    }
+
+    const speedBonus = Math.min(120, elapsedGameTime/1000 * 4 + score * 0.8);
+
     balls.push({
       id: ballIdCounter++,
-      x, y: -r-10, r,
-      vy: 55 + Math.random()*35 + Math.min(80, elapsedGameTime/1000*3),
-      color: hueSet[Math.floor(Math.random()*hueSet.length)],
-      rot: Math.random()*Math.PI*2,
-      rotSpeed: (Math.random()-0.5)*2
+      type, hp, maxHp: hp, x, y: -r-10, r,
+      vy: 60 + Math.random()*35 + speedBonus,
+      color, rot: Math.random()*Math.PI*2,
+      rotSpeed: (Math.random()-0.5)*2,
+      hitCooldown: 0
     });
   }
 
-  function spawnParticles(x,y,color,count=14){
+  function spawnParticles(x,y,color,count=16){
     for(let i=0;i<count;i++){
       const a = Math.random()*Math.PI*2;
-      const sp = 60 + Math.random()*160;
+      const sp = 70 + Math.random()*180;
       particles.push({
         x,y, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp,
-        life: 500+Math.random()*300, age:0, color, r:2+Math.random()*3
+        life: 400+Math.random()*300, age:0, color, r:2+Math.random()*3.5
       });
     }
   }
 
-  function destroyBall(ball, mode){
-    balls = balls.filter(b => b.id !== ball.id);
-    spawnParticles(ball.x, ball.y, ball.color, mode==='laser'?24:16);
-    score += mode === 'laser' ? 15 : 10;
-    scoreEl.textContent = 'SCORE ' + score;
-    flashCombo(mode === 'laser' ? '+15 LASER!' : '+10', ball.x, ball.y);
+  function hitBall(ball, damage, source){
+    if(ball.hitCooldown > 0) return;
+    
+    // Check type constraints
+    if(ball.type === 'hand_only' && source === 'mic') return;
+    if(ball.type === 'mic_only' && source === 'hand') return;
+
+    ball.hp -= damage;
+    ball.hitCooldown = 120; // 120ms hit cooldown
+
+    if(ball.hp <= 0){
+      balls = balls.filter(b => b.id !== ball.id);
+      spawnParticles(ball.x, ball.y, ball.color, 24);
+      const pts = ball.maxHp * 10;
+      score += pts;
+      scoreEl.textContent = 'SCORE ' + score;
+      flashCombo('+' + pts, ball.x, ball.y);
+    } else {
+      spawnParticles(ball.x, ball.y, ball.color, 6);
+      flashCombo('-1', ball.x, ball.y);
+    }
   }
 
   function flashCombo(text,x,y){
@@ -431,40 +472,51 @@ import { FilesetResolver, HandLandmarker } from "https://cdn.jsdelivr.net/npm/@m
     comboEl.style.transform = 'translate(-50%,-50%) translateY(0px)';
     comboEl.style.transition = 'none';
     requestAnimationFrame(()=>{
-      comboEl.style.transition = 'opacity .7s ease, transform .7s ease';
+      comboEl.style.transition = 'opacity .6s ease, transform .6s ease';
       comboEl.style.opacity = '0';
-      comboEl.style.transform = 'translate(-50%,-50%) translateY(-40px)';
+      comboEl.style.transform = 'translate(-50%,-50%) translateY(-35px)';
     });
   }
 
   function loseLife(){
     lives--;
     renderLives();
-    if(lives <= 0){
-      endGame();
-    }
+    if(lives <= 0) endGame();
   }
 
   function fireLaser(){
-    if(balls.length === 0) return;
-    // target the ball closest to the bottom (most urgent)
-    let target = balls[0];
-    for(const b of balls) if(b.y > target.y) target = b;
+    // Find valid target for laser
+    const validTargets = balls.filter(b => b.type !== 'hand_only');
+    if(validTargets.length === 0) return;
+    
+    let target = validTargets[0];
+    for(const b of validTargets) if(b.y > target.y) target = b;
+
     lasers.push({
       x: target.x, fromY: canvas.height, toY: target.y,
-      life: 220, age: 0, targetId: target.id
+      life: 200, age: 0
     });
-    destroyBall(target, 'laser');
+    hitBall(target, 1, 'mic');
   }
 
-  // ---------- Collision: fingertips vs balls ----------
+  function triggerMegaBeam(){
+    megaBeams.push({ life: 800, age: 0 });
+    // Destroy or heavily damage all destroyable balls
+    for(const ball of [...balls]){
+      if(ball.type !== 'hand_only'){
+        hitBall(ball, 999, 'mic');
+      }
+    }
+    flashCombo('💥 ULTIMATE BLAST!', canvas.width/2, canvas.height/2);
+  }
+
+  // ---------- Collision Detection ----------
   const FINGERTIP_IDX = [4,8,12,16,20];
   function getFingertipScreenPoints(){
     const pts = [];
     for(const hand of latestHandLandmarks){
       for(const idx of FINGERTIP_IDX){
-        const lm = hand[idx];
-        if(lm) pts.push(toScreen(lm.x, lm.y));
+        if(hand[idx]) pts.push(toScreen(hand[idx].x, hand[idx].y));
       }
     }
     return pts;
@@ -472,24 +524,24 @@ import { FilesetResolver, HandLandmarker } from "https://cdn.jsdelivr.net/npm/@m
 
   function checkFingertipCollisions(fingerPts){
     if(fingerPts.length === 0) return;
-    const hitR = 26;
-    for(const ball of [...balls]){
+    const hitR = 24;
+    for(const ball of balls){
       for(const p of fingerPts){
         const dx = p.x - ball.x, dy = p.y - ball.y;
         if(dx*dx + dy*dy < (ball.r+hitR)*(ball.r+hitR)){
-          destroyBall(ball, 'hand');
+          hitBall(ball, 1, 'hand');
           break;
         }
       }
     }
   }
 
-  // ---------- Drawing ----------
+  // ---------- Rendering Functions ----------
   function drawHandSkeleton(){
     ctx.save();
     for(const hand of latestHandLandmarks){
       const pts = hand.map(lm => toScreen(lm.x, lm.y));
-      ctx.strokeStyle = 'rgba(56,245,208,.55)';
+      ctx.strokeStyle = 'rgba(56,245,208,.6)';
       ctx.lineWidth = 2;
       const CONNECTIONS = [[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],
         [0,9],[9,10],[10,11],[11,12],[0,13],[13,14],[14,15],[15,16],
@@ -503,9 +555,9 @@ import { FilesetResolver, HandLandmarker } from "https://cdn.jsdelivr.net/npm/@m
       for(const idx of FINGERTIP_IDX){
         const p = pts[idx];
         ctx.beginPath();
-        ctx.arc(p.x,p.y,9,0,Math.PI*2);
-        ctx.fillStyle = 'rgba(56,245,208,.85)';
-        ctx.shadowColor = '#38f5d0'; ctx.shadowBlur = 12;
+        ctx.arc(p.x,p.y,8,0,Math.PI*2);
+        ctx.fillStyle = '#38f5d0';
+        ctx.shadowColor = '#38f5d0'; ctx.shadowBlur = 10;
         ctx.fill();
       }
       ctx.shadowBlur = 0;
@@ -517,82 +569,81 @@ import { FilesetResolver, HandLandmarker } from "https://cdn.jsdelivr.net/npm/@m
     ctx.save();
     ctx.translate(b.x,b.y);
     ctx.rotate(b.rot);
+    
     const grad = ctx.createRadialGradient(-b.r*0.3,-b.r*0.3,b.r*0.1, 0,0,b.r);
     grad.addColorStop(0, '#ffffff');
-    grad.addColorStop(0.25, b.color);
-    grad.addColorStop(1, '#0a0f14');
+    grad.addColorStop(0.3, b.color);
+    grad.addColorStop(1, '#050a12');
+    
     ctx.beginPath();
     ctx.arc(0,0,b.r,0,Math.PI*2);
     ctx.fillStyle = grad;
-    ctx.shadowColor = b.color; ctx.shadowBlur = 22;
+    ctx.shadowColor = b.color; ctx.shadowBlur = 18;
     ctx.fill();
     ctx.shadowBlur = 0;
-    ctx.strokeStyle = 'rgba(255,255,255,.35)';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    // spikes to read as "danger orb"
-    ctx.strokeStyle = b.color;
-    ctx.lineWidth = 2;
-    for(let i=0;i<6;i++){
-      const a = i*Math.PI/3;
-      ctx.beginPath();
-      ctx.moveTo(Math.cos(a)*b.r*0.7, Math.sin(a)*b.r*0.7);
-      ctx.lineTo(Math.cos(a)*b.r*1.25, Math.sin(a)*b.r*1.25);
-      ctx.stroke();
+
+    // Draw Icons/Text inside
+    ctx.rotate(-b.rot); // unrotate text
+    ctx.fillStyle = '#fff';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    
+    if(b.type === 'multitap'){
+      ctx.font = 'bold 18px sans-serif';
+      ctx.fillText(b.hp, 0, 0);
+    } else if(b.type === 'hand_only'){
+      ctx.font = '16px sans-serif';
+      ctx.fillText('🖐️', 0, 0);
+    } else if(b.type === 'mic_only'){
+      ctx.font = '16px sans-serif';
+      ctx.fillText('🎤', 0, 0);
     }
+
     ctx.restore();
   }
 
   function drawLaser(l){
-    const t = l.age / l.life;
-    const alpha = 1 - t;
+    const alpha = 1 - (l.age / l.life);
     ctx.save();
     ctx.globalAlpha = alpha;
-    const grad = ctx.createLinearGradient(l.x, l.fromY, l.x, l.toY);
-    grad.addColorStop(0, 'rgba(255,61,154,0)');
-    grad.addColorStop(1, '#ffffff');
-    ctx.strokeStyle = grad;
-    ctx.lineWidth = 8;
-    ctx.shadowColor = '#ff3d9a'; ctx.shadowBlur = 25;
+    ctx.strokeStyle = '#ff3d9a';
+    ctx.lineWidth = 7;
+    ctx.shadowColor = '#ff3d9a'; ctx.shadowBlur = 20;
     ctx.beginPath();
     ctx.moveTo(l.x, l.fromY);
     ctx.lineTo(l.x, l.toY);
     ctx.stroke();
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = '#fff';
-    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawMegaBeams(mb){
+    const t = mb.age / mb.life;
+    const alpha = 1 - t;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = 'rgba(255, 61, 154, 0.45)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    ctx.fillStyle = '#ffffff';
+    ctx.shadowColor = '#ff3d9a'; ctx.shadowBlur = 50;
+    ctx.fillRect(canvas.width*0.1, 0, canvas.width*0.8, canvas.height);
     ctx.restore();
   }
 
   function drawParticle(p){
-    const t = p.age / p.life;
     ctx.save();
-    ctx.globalAlpha = 1 - t;
+    ctx.globalAlpha = 1 - (p.age / p.life);
     ctx.beginPath();
     ctx.arc(p.x, p.y, p.r, 0, Math.PI*2);
     ctx.fillStyle = p.color;
-    ctx.shadowColor = p.color; ctx.shadowBlur = 8;
     ctx.fill();
     ctx.restore();
   }
 
-  function drawDangerLine(){
-    const y = canvas.height - 46;
-    ctx.save();
-    ctx.strokeStyle = 'rgba(255,61,154,.35)';
-    ctx.setLineDash([10,8]);
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(0,y);
-    ctx.lineTo(canvas.width,y);
-    ctx.stroke();
-    ctx.restore();
-  }
-
-  // ---------- Main loop ----------
+  // ---------- Game Loop ----------
   function gameLoop(now){
     if(!running) return;
-    const dt = Math.min(50, now - lastFrameTime); // ms, clamp for tab-switch spikes
+    const dt = Math.min(50, now - lastFrameTime);
     lastFrameTime = now;
     elapsedGameTime += dt;
 
@@ -600,19 +651,20 @@ import { FilesetResolver, HandLandmarker } from "https://cdn.jsdelivr.net/npm/@m
     detectHandsThisFrame();
     ctx.clearRect(0,0,canvas.width,canvas.height);
 
-    // spawn
+    // Dynamic Spawning
     spawnTimer += dt;
-    spawnInterval = Math.max(550, 1400 - elapsedGameTime/1000*18);
+    spawnInterval = Math.max(450, 1400 - (score * 8) - (elapsedGameTime/1000 * 12));
     if(spawnTimer > spawnInterval){
       spawnTimer = 0;
       spawnBall();
     }
 
-    // update balls
-    const dangerY = canvas.height - 46;
+    // Update Balls
     for(const b of [...balls]){
       b.y += b.vy * (dt/1000);
       b.rot += b.rotSpeed * (dt/1000);
+      b.hitCooldown = Math.max(0, b.hitCooldown - dt);
+
       if(b.y - b.r > canvas.height){
         balls = balls.filter(x=>x.id!==b.id);
         loseLife();
@@ -620,46 +672,69 @@ import { FilesetResolver, HandLandmarker } from "https://cdn.jsdelivr.net/npm/@m
     }
     balls.forEach(drawBall);
 
-    // fingertip collisions
+    // Hands
     const fingerPts = getFingertipScreenPoints();
     checkFingertipCollisions(fingerPts);
     drawHandSkeleton();
 
-    // mic volume + laser trigger
+    // Mic & Level 1 / Level 2 Logic
     const volPct = readMicVolumePct();
     micFill.style.width = volPct + '%';
     laserCooldown = Math.max(0, laserCooldown - dt);
-    if(volPct >= micThresholdPct && laserCooldown <= 0){
+
+    // L2 Ultimate Charge Check
+    if(volPct >= micL2Pct){
+      l2HoldTimer += dt;
+      const pct = Math.min(100, (l2HoldTimer / L2_REQUIRED_HOLD_MS) * 100);
+      chargeContainer.style.setProperty('--charge-pct', pct);
+      chargeContainer.classList.add('active');
+
+      if(l2HoldTimer >= L2_REQUIRED_HOLD_MS){
+        triggerMegaBeam();
+        l2HoldTimer = 0;
+        chargeContainer.classList.remove('active');
+      }
+    } else {
+      l2HoldTimer = Math.max(0, l2HoldTimer - dt * 2); // Cool down charge
+      if(l2HoldTimer === 0) chargeContainer.classList.remove('active');
+      else chargeContainer.style.setProperty('--charge-pct', (l2HoldTimer / L2_REQUIRED_HOLD_MS) * 100);
+    }
+
+    // L1 Normal Laser
+    if(volPct >= micL1Pct && volPct < micL2Pct && laserCooldown <= 0){
       laserCooldown = LASER_COOLDOWN_MS;
       fireLaser();
     }
 
-    // lasers
+    // Render Lasers & MegaBeams
     for(const l of [...lasers]){
       l.age += dt;
       if(l.age >= l.life){ lasers = lasers.filter(x=>x!==l); continue; }
       drawLaser(l);
     }
+    for(const mb of [...megaBeams]){
+      mb.age += dt;
+      if(mb.age >= mb.life){ megaBeams = megaBeams.filter(x=>x!==mb); continue; }
+      drawMegaBeams(mb);
+    }
 
-    // particles
+    // Particles
     for(const p of [...particles]){
       p.age += dt;
       if(p.age >= p.life){ particles = particles.filter(x=>x!==p); continue; }
-      p.x += p.vx*(dt/1000);
-      p.y += p.vy*(dt/1000);
-      p.vy += 220*(dt/1000);
+      p.x += p.vx*(dt/1000); p.y += p.vy*(dt/1000);
       drawParticle(p);
     }
 
     if(running) requestAnimationFrame(gameLoop);
   }
 
-  // ---------- Flow control ----------
+  // ---------- Control & Flow ----------
   function resetGameState(){
     score = 0; lives = MAX_LIVES;
-    balls = []; lasers = []; particles = [];
+    balls = []; lasers = []; megaBeams = []; particles = [];
     spawnTimer = 0; spawnInterval = 1400; elapsedGameTime = 0;
-    laserCooldown = 0;
+    laserCooldown = 0; l2HoldTimer = 0;
     scoreEl.textContent = 'SCORE 0';
     renderLives();
   }
@@ -668,10 +743,11 @@ import { FilesetResolver, HandLandmarker } from "https://cdn.jsdelivr.net/npm/@m
     running = false;
     finalScoreNum.textContent = score;
     gameOverScreen.classList.remove('hidden');
+    chargeContainer.classList.remove('active');
     requestAnimationFrame(previewLoop);
   }
 
-  async function beginGame(){
+  function beginGame(){
     resetGameState();
     startScreen.classList.add('hidden');
     gameOverScreen.classList.add('hidden');
@@ -680,33 +756,25 @@ import { FilesetResolver, HandLandmarker } from "https://cdn.jsdelivr.net/npm/@m
     requestAnimationFrame(gameLoop);
   }
 
-  function updateDebugStatus(){
-    const now = performance.now();
-    const sinceResults = lastResultsAt ? Math.round((now - lastResultsAt)/1000) : null;
-    let lines = [];
-    lines.push(`มือที่ตรวจพบตอนนี้: ${latestHandLandmarks.length}`);
-    lines.push(`เฟรมสำเร็จ: ${handsFramesOk} / ผิดพลาด: ${handsFramesErr}`);
-    if(handsFramesErr > 0 && handsFramesOk === 0){
-      debugStatus.classList.add('err');
-      lines = [`โมเดลมือโหลด/ทำงานไม่สำเร็จ`, `(${lastHandsError || 'unknown error'})`,
-        `ลองเปิดผ่าน HTTPS หรือ localhost แทน file://`];
-    } else if(handsFramesOk > 0 && sinceResults !== null && sinceResults > 4 && latestHandLandmarks.length === 0){
-      debugStatus.classList.add('err');
-      lines.push('ยังไม่พบมือ — ลองยกมือให้เต็มเฟรม/เพิ่มแสง');
-    } else {
-      debugStatus.classList.remove('err');
-    }
-    debugStatus.innerHTML = lines.join('<br>');
-    requestAnimationFrame(updateDebugStatus);
-  }
-
   function previewLoop(){
-    if(running) return; // main gameLoop takes over once playing
+    if(running) return;
     updateVideoMap();
     detectHandsThisFrame();
     ctx.clearRect(0,0,canvas.width,canvas.height);
     drawHandSkeleton();
     requestAnimationFrame(previewLoop);
+  }
+
+  function updateDebugStatus(){
+    let lines = [`มือที่พบ: ${latestHandLandmarks.length}`];
+    if(handsFramesErr > 0 && handsFramesOk === 0){
+      debugStatus.classList.add('err');
+      lines = [`ไม่สามารถโหลดโมเดลมือได้`, `ลองใช้ HTTPS หรือ Localhost` ];
+    } else {
+      debugStatus.classList.remove('err');
+    }
+    debugStatus.innerHTML = lines.join('<br>');
+    requestAnimationFrame(updateDebugStatus);
   }
 
   async function bootstrap(){
@@ -727,11 +795,16 @@ import { FilesetResolver, HandLandmarker } from "https://cdn.jsdelivr.net/npm/@m
   }
 
   threshSlider.addEventListener('input', () => {
-    micThresholdPct = Number(threshSlider.value);
-    micThresh.style.left = micThresholdPct + '%';
+    micL1Pct = Number(threshSlider.value);
+    micL2Pct = Math.min(100, micL1Pct + 35);
+    micThreshL1.style.left = micL1Pct + '%';
+    micThreshL2.style.left = micL2Pct + '%';
   });
-  micThresholdPct = Number(threshSlider.value);
-  micThresh.style.left = micThresholdPct + '%';
+
+  micL1Pct = Number(threshSlider.value);
+  micL2Pct = Math.min(100, micL1Pct + 35);
+  micThreshL1.style.left = micL1Pct + '%';
+  micThreshL2.style.left = micL2Pct + '%';
 
   startBtn.addEventListener('click', beginGame);
   retryBtn.addEventListener('click', beginGame);
