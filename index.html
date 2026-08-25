@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-<title>HAND BLAST — BALANCED EDITION</title>
+<title>HAND BLAST — BALANCED & TARGET EDITION</title>
 <style>
   :root{
     --neon-cyan:#38f5d0;
@@ -54,13 +54,16 @@
     padding:calc(10px + env(safe-area-inset-top)) 14px 0 14px;
     pointer-events:none; z-index:5;
   }
+  .hudGroup{ display:flex; gap:8px; flex-direction:column; }
   .pill{
     background:var(--panel); border:1px solid var(--line); border-radius:999px;
-    padding:7px 14px; font-weight:700; letter-spacing:.5px; font-size:15px;
+    padding:7px 14px; font-weight:700; letter-spacing:.5px; font-size:14px;
     box-shadow:0 0 14px rgba(56,245,208,.15);
     backdrop-filter:blur(6px);
   }
   #score{color:var(--neon-cyan);}
+  #targetDisplay{color:var(--neon-amber);}
+  #levelDisplay{color:var(--neon-purple); border-color:var(--neon-purple);}
   #lives{display:flex; gap:5px; align-items:center;}
   .heart{width:16px; height:16px; transition:opacity .2s, transform .2s;}
   .heart.lost{opacity:.15; transform:scale(.7);}
@@ -113,41 +116,66 @@
   .overlay{
     position:absolute; inset:0; z-index:20;
     display:flex; align-items:center; justify-content:center; flex-direction:column;
-    text-align:center; padding:24px;
+    text-align:center; padding:20px;
     background:radial-gradient(ellipse at 50% 30%, rgba(20,40,50,.85), rgba(2,5,9,.96));
     backdrop-filter:blur(4px);
+    overflow-y:auto;
   }
   .hidden{display:none !important;}
   h1{
-    font-size:clamp(26px,7vw,42px); margin:0 0 4px 0; letter-spacing:2px; color:#fff;
+    font-size:clamp(24px,6vw,38px); margin:0 0 4px 0; letter-spacing:2px; color:#fff;
     text-shadow:0 0 12px var(--neon-cyan), 0 0 30px rgba(56,245,208,.5);
   }
-  .sub{color:#8fe8d8; font-size:12px; letter-spacing:2px; margin-bottom:18px; text-transform:uppercase;}
+  .sub{color:#8fe8d8; font-size:11px; letter-spacing:2px; margin-bottom:14px; text-transform:uppercase;}
+  
   .rules{
     max-width:380px; text-align:left; background:var(--panel); border:1px solid var(--line);
-    border-radius:14px; padding:14px 16px; margin-bottom:18px; font-size:13px; line-height:1.6;
+    border-radius:14px; padding:12px 16px; margin-bottom:14px; font-size:12px; line-height:1.5;
   }
   .rules b{color:var(--neon-amber);}
   .rules span.icon{width:1.4em; display:inline-block;}
+
+  .inputGroup{
+    display:flex; align-items:center; gap:10px; margin-bottom:14px; background:var(--panel);
+    border:1px solid var(--line); padding:8px 16px; border-radius:999px;
+  }
+  .inputGroup label{font-size:13px; font-weight:bold; color:var(--neon-amber);}
+  .inputGroup input[type=number]{
+    width:80px; background:transparent; border:none; color:#fff; font-size:16px; font-weight:bold;
+    text-align:center; outline:none;
+  }
+
   #startBtn,#retryBtn{
     font-size:18px; font-weight:800; letter-spacing:1px; color:#04150f;
     background:linear-gradient(135deg, var(--neon-cyan), #7dffcf);
-    border:none; padding:14px 40px; border-radius:999px; cursor:pointer;
-    box-shadow:0 0 24px rgba(56,245,208,.55);
+    border:none; padding:12px 36px; border-radius:999px; cursor:pointer;
+    box-shadow:0 0 24px rgba(56,245,208,.55); margin-top:6px;
   }
   #startBtn:active,#retryBtn:active{transform:scale(.96);}
-  .sliderRow{display:flex; align-items:center; gap:10px; margin-bottom:14px; width:min(320px,80vw);}
+  .sliderRow{display:flex; align-items:center; gap:10px; margin-bottom:12px; width:min(320px,80vw);}
   .sliderRow label{font-size:12px; color:#9be; letter-spacing:1px; white-space:nowrap;}
   input[type=range]{flex:1; accent-color:var(--neon-cyan);}
   #camFacingBtn{
-    margin-top:12px; background:transparent; border:1px solid var(--line); color:#9be;
-    padding:8px 16px; border-radius:999px; font-size:12px; letter-spacing:1px; cursor:pointer;
+    margin-top:10px; background:transparent; border:1px solid var(--line); color:#9be;
+    padding:6px 14px; border-radius:999px; font-size:12px; letter-spacing:1px; cursor:pointer;
   }
-  #permError{color:#ff8fa8; font-size:13px; max-width:320px; margin-top:14px; display:none;}
+  #permError{color:#ff8fa8; font-size:13px; max-width:320px; margin-top:10px; display:none;}
 
   #gameOverTitle{color:var(--neon-magenta); text-shadow:0 0 14px var(--neon-magenta);}
-  #finalScore{font-size:20px; margin-bottom:22px; color:#fff;}
-  #finalScore b{color:var(--neon-amber); font-size:30px;}
+  #gameOverTitle.win{color:var(--neon-cyan); text-shadow:0 0 14px var(--neon-cyan);}
+  #finalScore{font-size:18px; margin-bottom:12px; color:#fff;}
+  #finalScore b{color:var(--neon-amber); font-size:26px;}
+
+  /* Leaderboard Styling */
+  .leaderboard{
+    width:min(340px,90vw); background:var(--panel); border:1px solid var(--line);
+    border-radius:12px; padding:12px; margin:10px 0 16px 0; font-size:13px;
+  }
+  .leaderboard h3{ margin:0 0 8px 0; color:var(--neon-cyan); font-size:14px; text-transform:uppercase; letter-spacing:1px;}
+  .lbRow{ display:flex; justify-content:space-between; padding:4px 8px; border-bottom:1px solid rgba(255,255,255,.05); }
+  .lbRow:last-child{ border-bottom:none; }
+  .lbRank{ font-weight:bold; color:var(--neon-amber); width:30px; text-align:left;}
+  .lbScore{ font-weight:bold; color:#fff; }
 
   #loading{
     position:absolute; inset:0; z-index:30; display:flex; align-items:center; justify-content:center;
@@ -161,7 +189,7 @@
   @keyframes spin{to{transform:rotate(360deg);}}
 
   #debugStatus{
-    position:absolute; left:14px; top:calc(65px + env(safe-area-inset-top));
+    position:absolute; left:14px; top:calc(100px + env(safe-area-inset-top));
     background:var(--panel); border:1px solid var(--line); border-radius:10px;
     padding:6px 10px; font-size:11px; color:#9be; z-index:5; pointer-events:none;
     letter-spacing:.5px; max-width:260px; line-height:1.4;
@@ -185,8 +213,14 @@
   <div id="scan"></div>
 
   <div id="hud">
-    <div id="score" class="pill">SCORE 0</div>
-    <div id="lives" class="pill"></div>
+    <div class="hudGroup">
+      <div id="score" class="pill">SCORE 0</div>
+      <div id="targetDisplay" class="pill">TARGET: 500</div>
+    </div>
+    <div class="hudGroup" style="align-items:flex-end;">
+      <div id="lives" class="pill"></div>
+      <div id="levelDisplay" class="pill">LVL 1</div>
+    </div>
   </div>
 
   <div id="chargeContainer">
@@ -211,26 +245,41 @@
 
 <div id="startScreen" class="overlay hidden">
   <h1>HAND BLAST</h1>
-  <div class="sub">BALANCED EDITION</div>
-  <div class="rules">
-    <div><span class="icon">🖐️</span> ปัดมือแตะลูกบอลธรรมดาหรือลูกบอลมัลติทัช</div>
-    <div><span class="icon">🖐️❌</span> <b>ลูกบอลไอคอนมือ:</b> ทำลายด้วยมือเท่านั้น!</div>
-    <div><span class="icon">🎤❌</span> <b>ลูกบอลไอคอนไมค์:</b> ทำลายด้วยเสียงเท่านั้น!</div>
-    <div><span class="icon">🔊</span> <b>ไมค์ L1 (สีส้ม):</b> ตะโกนยิงเลเซอร์</div>
-    <div><span class="icon">💥</span> <b>ไมค์ L2 (สีชมพู):</b> ตะโกนลากยาวค้าง 1.8 วิ ปล่อยคลื่นพลังยักษ์ทำลายล้างทั้งจอ!</div>
+  <div class="sub">BALANCED & TARGET EDITION</div>
+  
+  <div class="inputGroup">
+    <label for="targetInput">🎯 เป้าหมายคะแนนชนะ:</label>
+    <input type="number" id="targetInput" value="500" min="100" step="100">
   </div>
+
+  <div class="rules">
+    <div><span class="icon">📈</span> <b>เพิ่มระดับความยากทุก 300 คะแนน!</b></div>
+    <div><span class="icon">🖐️</span> ปัดมือแตะลูกบอลธรรมดา / ลูกบอลตัวเลข</div>
+    <div><span class="icon">🖐️❌</span> <b>ลูกบอลมือ (Lvl 2+):</b> ทำลายด้วยมือเท่านั้น!</div>
+    <div><span class="icon">🎤❌</span> <b>ลูกบอลไมค์ (Lvl 3+):</b> ทำลายด้วยเสียงเท่านั้น!</div>
+    <div><span class="icon">🔊</span> <b>ไมค์ L1 (สีส้ม):</b> ตะโกนยิงเลเซอร์</div>
+    <div><span class="icon">💥</span> <b>ไมค์ L2 (สีชมพู):</b> ตะโกนค้าง 1.8 วิ ปล่อยคลื่นพลังยักษ์!</div>
+  </div>
+  
   <div class="sliderRow">
     <label>ความไวไมค์ L1</label>
     <input type="range" id="threshSlider" min="8" max="60" value="25">
   </div>
-  <button id="startBtn">เริ่มเกม</button>
+  
+  <button id="startBtn">เริ่มเล่นเกม</button>
   <button id="camFacingBtn">🔄 สลับกล้อง (หน้า/หลัง)</button>
-  <div id="permError">ต้องอนุญาตให้ใช้กล้องและไมโครโฟนเพื่อเล่นเกมนี้ กรุณาอนุญาตแล้วลองใหม่</div>
+  <div id="permError">ต้องอนุญาตให้ใช้กล้องและไมโครโฟนเพื่อเล่นเกมนี้</div>
 </div>
 
 <div id="gameOverScreen" class="overlay hidden">
   <h1 id="gameOverTitle">GAME OVER</h1>
   <div id="finalScore">คะแนนของคุณ <br><b id="finalScoreNum">0</b></div>
+  
+  <div class="leaderboard">
+    <h3>🏆 สถิติสูงสุด 5 อันดับแรก</h3>
+    <div id="lbList"></div>
+  </div>
+
   <button id="retryBtn">เล่นอีกครั้ง</button>
 </div>
 
@@ -246,17 +295,22 @@ import { FilesetResolver, HandLandmarker } from "https://cdn.jsdelivr.net/npm/@m
   const loading = document.getElementById('loading');
   const startScreen = document.getElementById('startScreen');
   const gameOverScreen = document.getElementById('gameOverScreen');
+  const gameOverTitle = document.getElementById('gameOverTitle');
   const startBtn = document.getElementById('startBtn');
   const retryBtn = document.getElementById('retryBtn');
   const camFacingBtn = document.getElementById('camFacingBtn');
   const permError = document.getElementById('permError');
   const scoreEl = document.getElementById('score');
+  const targetDisplay = document.getElementById('targetDisplay');
+  const levelDisplay = document.getElementById('levelDisplay');
+  const targetInput = document.getElementById('targetInput');
   const livesEl = document.getElementById('lives');
   const micFill = document.getElementById('micFill');
   const micThreshL1 = document.getElementById('micThreshL1');
   const micThreshL2 = document.getElementById('micThreshL2');
   const threshSlider = document.getElementById('threshSlider');
   const finalScoreNum = document.getElementById('finalScoreNum');
+  const lbList = document.getElementById('lbList');
   const comboEl = document.getElementById('combo');
   const debugStatus = document.getElementById('debugStatus');
   const chargeContainer = document.getElementById('chargeContainer');
@@ -271,6 +325,8 @@ import { FilesetResolver, HandLandmarker } from "https://cdn.jsdelivr.net/npm/@m
 
   let running = false;
   let score = 0;
+  let targetScore = 500;
+  let currentLevel = 1;
   let lives = 3;
   const MAX_LIVES = 3;
 
@@ -280,9 +336,8 @@ import { FilesetResolver, HandLandmarker } from "https://cdn.jsdelivr.net/npm/@m
   let particles = [];
   let ballIdCounter = 0;
   let spawnTimer = 0;
-  let spawnInterval = 1800; // ปรับเพิ่มช่องว่างเวลาเกิดเริ่มต้น
+  let spawnInterval = 1800; 
   let lastFrameTime = performance.now();
-  let elapsedGameTime = 0;
 
   let latestHandLandmarks = [];
   let videoMap = {scale:1, offX:0, offY:0, vw:0, vh:0};
@@ -290,9 +345,9 @@ import { FilesetResolver, HandLandmarker } from "https://cdn.jsdelivr.net/npm/@m
   let handsFramesErr = 0;
 
   let laserCooldown = 0;
-  const LASER_COOLDOWN_MS = 380; // ปรับให้ยิงเลเซอร์ได้รัวขึ้นนิดหน่อย
+  const LASER_COOLDOWN_MS = 380; 
   let l2HoldTimer = 0;
-  const L2_REQUIRED_HOLD_MS = 1800; // ลดเวลาชาร์จจาก 3s เหลือ 1.8s
+  const L2_REQUIRED_HOLD_MS = 1800; 
 
   function resizeCanvas(){
     canvas.width = canvas.clientWidth;
@@ -393,9 +448,18 @@ import { FilesetResolver, HandLandmarker } from "https://cdn.jsdelivr.net/npm/@m
     return Math.min(100, rms * 280);
   }
 
-  // ---------- Spawning Entities ----------
+  // ---------- Level & Spawning System ----------
+  function updateLevelLogic(){
+    const newLevel = Math.floor(score / 300) + 1;
+    if(newLevel !== currentLevel){
+      currentLevel = newLevel;
+      levelDisplay.textContent = 'LVL ' + currentLevel;
+      flashCombo('LEVEL UP! LVL ' + currentLevel, canvas.width/2, canvas.height/3);
+    }
+  }
+
   function spawnBall(){
-    const r = 30 + Math.random()*14;
+    const r = 30 + Math.random()*12;
     const x = r + Math.random() * (canvas.width - r*2);
     const randType = Math.random();
     
@@ -403,27 +467,27 @@ import { FilesetResolver, HandLandmarker } from "https://cdn.jsdelivr.net/npm/@m
     let hp = 1;
     let color = '#38f5d0';
 
-    // ปรับเงื่อนไขการเกิดให้ปลดล็อกทีละขั้น และลดอัตราการเกิดบอลพิเศษ
-    if(score > 60 && randType < 0.18){
-      type = 'hand_only';
-      color = '#00f0ff';
-    } else if(score > 100 && randType >= 0.18 && randType < 0.36){
+    // ปลดล็อกประเภทบอลตาม Level (ทุกๆ 300 คะแนน)
+    if(currentLevel >= 3 && randType < 0.22){
       type = 'mic_only';
       color = '#ff007f';
-    } else if(score > 40 && randType >= 0.36 && randType < 0.60){
+    } else if(currentLevel >= 2 && randType >= 0.22 && randType < 0.44){
+      type = 'hand_only';
+      color = '#00f0ff';
+    } else if(randType >= 0.44 && randType < 0.70){
       type = 'multitap';
-      hp = Math.min(6, 2 + Math.floor(score / 80)); // ลด HP สูงสุดลง
+      hp = Math.min(5, 2 + Math.floor(currentLevel / 2));
       color = '#ffb84d';
     }
 
-    // ลดความเร็วกราฟความยาก (Speed scaling)
-    const speedBonus = Math.min(65, elapsedGameTime/1000 * 1.5 + score * 0.35);
+    // ความเร็วบอลขยับเพิ่มตาม Level (เป็นขั้นๆ ไม่เร็วจนเกินไป)
+    const baseSpeed = 40 + (currentLevel - 1) * 15;
+    const vy = baseSpeed + Math.random() * 20;
 
     balls.push({
       id: ballIdCounter++,
-      type, hp, maxHp: hp, x, y: -r-10, r,
-      vy: 42 + Math.random()*25 + speedBonus, // ความเร็วเริ่มต้นช้าลง
-      color, rot: Math.random()*Math.PI*2,
+      type, hp, maxHp: hp, x, y: -r-10, r, vy, color,
+      rot: Math.random()*Math.PI*2,
       rotSpeed: (Math.random()-0.5)*2,
       hitCooldown: 0
     });
@@ -456,6 +520,13 @@ import { FilesetResolver, HandLandmarker } from "https://cdn.jsdelivr.net/npm/@m
       score += pts;
       scoreEl.textContent = 'SCORE ' + score;
       flashCombo('+' + pts, ball.x, ball.y);
+      
+      updateLevelLogic();
+
+      // Check Win Condition
+      if(score >= targetScore){
+        endGame(true);
+      }
     } else {
       spawnParticles(ball.x, ball.y, ball.color, 6);
       flashCombo('-1', ball.x, ball.y);
@@ -479,7 +550,7 @@ import { FilesetResolver, HandLandmarker } from "https://cdn.jsdelivr.net/npm/@m
   function loseLife(){
     lives--;
     renderLives();
-    if(lives <= 0) endGame();
+    if(lives <= 0) endGame(false);
   }
 
   function fireLaser(){
@@ -520,7 +591,7 @@ import { FilesetResolver, HandLandmarker } from "https://cdn.jsdelivr.net/npm/@m
 
   function checkFingertipCollisions(fingerPts){
     if(fingerPts.length === 0) return;
-    const hitR = 28; // เพิ่มขอบเขตการชนของนิ้วมือให้แตะง่ายขึ้น
+    const hitR = 28; 
     for(const ball of balls){
       for(const p of fingerPts){
         const dx = p.x - ball.x, dy = p.y - ball.y;
@@ -640,15 +711,14 @@ import { FilesetResolver, HandLandmarker } from "https://cdn.jsdelivr.net/npm/@m
     if(!running) return;
     const dt = Math.min(50, now - lastFrameTime);
     lastFrameTime = now;
-    elapsedGameTime += dt;
 
     updateVideoMap();
     detectHandsThisFrame();
     ctx.clearRect(0,0,canvas.width,canvas.height);
 
-    // Dynamic Spawning (ปรับสเกลให้นิ่มนวลขึ้น)
+    // Dynamic Spawning Based on Level
     spawnTimer += dt;
-    spawnInterval = Math.max(750, 1800 - (score * 3.5) - (elapsedGameTime/1000 * 5));
+    spawnInterval = Math.max(700, 1800 - (currentLevel - 1) * 200);
     if(spawnTimer > spawnInterval){
       spawnTimer = 0;
       spawnBall();
@@ -672,7 +742,7 @@ import { FilesetResolver, HandLandmarker } from "https://cdn.jsdelivr.net/npm/@m
     checkFingertipCollisions(fingerPts);
     drawHandSkeleton();
 
-    // Mic & Level 1 / Level 2 Logic
+    // Mic Logic
     const volPct = readMicVolumePct();
     micFill.style.width = volPct + '%';
     laserCooldown = Math.max(0, laserCooldown - dt);
@@ -724,19 +794,63 @@ import { FilesetResolver, HandLandmarker } from "https://cdn.jsdelivr.net/npm/@m
     if(running) requestAnimationFrame(gameLoop);
   }
 
+  // ---------- Leaderboard System ----------
+  function getLeaderboard(){
+    return JSON.parse(localStorage.getItem('handblast_lb') || '[]');
+  }
+
+  function saveScore(newScore){
+    const lb = getLeaderboard();
+    lb.push({ score: newScore, date: new Date().toLocaleDateString('th-TH') });
+    lb.sort((a,b) => b.score - a.score);
+    const top5 = lb.slice(0, 5);
+    localStorage.setItem('handblast_lb', JSON.stringify(top5));
+    return top5;
+  }
+
+  function renderLeaderboard(lb){
+    lbList.innerHTML = '';
+    if(lb.length === 0){
+      lbList.innerHTML = '<div style="color:#888;">ยังไม่มีสถิติ</div>';
+      return;
+    }
+    lb.forEach((item, index) => {
+      const row = document.createElement('div');
+      row.className = 'lbRow';
+      row.innerHTML = `<span class="lbRank">#${index+1}</span> <span class="lbScore">${item.score} คะแนน</span> <span style="color:#668; font-size:11px;">${item.date}</span>`;
+      lbList.appendChild(row);
+    });
+  }
+
   // ---------- Control & Flow ----------
   function resetGameState(){
-    score = 0; lives = MAX_LIVES;
+    score = 0; lives = MAX_LIVES; currentLevel = 1;
+    targetScore = parseInt(targetInput.value) || 500;
     balls = []; lasers = []; megaBeams = []; particles = [];
-    spawnTimer = 0; spawnInterval = 1800; elapsedGameTime = 0;
+    spawnTimer = 0; spawnInterval = 1800;
     laserCooldown = 0; l2HoldTimer = 0;
+    
     scoreEl.textContent = 'SCORE 0';
+    targetDisplay.textContent = 'TARGET: ' + targetScore;
+    levelDisplay.textContent = 'LVL 1';
     renderLives();
   }
 
-  function endGame(){
+  function endGame(isWin = false){
     running = false;
     finalScoreNum.textContent = score;
+    
+    if(isWin){
+      gameOverTitle.textContent = 'VICTORY!';
+      gameOverTitle.classList.add('win');
+    } else {
+      gameOverTitle.textContent = 'GAME OVER';
+      gameOverTitle.classList.remove('win');
+    }
+
+    const top5 = saveScore(score);
+    renderLeaderboard(top5);
+
     gameOverScreen.classList.remove('hidden');
     chargeContainer.classList.remove('active');
     requestAnimationFrame(previewLoop);
